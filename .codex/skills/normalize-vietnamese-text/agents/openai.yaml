@@ -1,0 +1,4 @@
+interface:
+  display_name: "Normalize Vietnamese Text"
+  short_description: "Chuan hoa cau chu tieng Viet dung dau va tu nhien."
+  default_prompt: "Use $normalize-vietnamese-text to rewrite this text into standard, natural Vietnamese while preserving the original meaning."
