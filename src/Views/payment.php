@@ -12,7 +12,7 @@ $activeCampaign = $activeCampaign ?? null;
 
 <section class="page-head">
     <p class="eyebrow">ATM / VietQR</p>
-    <h1>Nạp tiền VietQR</h1>
+    <h1>Nạp tiền </h1>
     <p>Chọn mệnh giá, quét mã QR và chuyển khoản đúng nội dung hệ thống hiển thị.</p>
 </section>
 
@@ -31,7 +31,7 @@ $activeCampaign = $activeCampaign ?? null;
                 Tài khoản nạp: <strong><?= e($account['username'] ?? '') ?></strong>
                 <br>
                 Nội dung chuyển khoản của bạn sẽ có dạng:
-                <strong><?= e(strtoupper((string) $bankAccount['code']) . (string) $account['id']) ?></strong>
+                <strong><?= e($paymentContent) ?></strong>
             </div>
         <?php endif; ?>
 

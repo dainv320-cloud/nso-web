@@ -58,7 +58,7 @@ final class UsersController
 
         $connection = Database::connection();
         $statement = $connection->prepare(
-            'insert into users (name, username, email, password, created_at, updated_at) values (:name, :username, :email, :password, now(), now())'
+            'insert into users (name, username, email, password, tongnapthang_reset_at, created_at, updated_at) values (:name, :username, :email, :password, now(), now(), now())'
         );
         $statement->execute([
             'name' => $name !== '' ? $name : $username,

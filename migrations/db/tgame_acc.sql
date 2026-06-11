@@ -10,6 +10,7 @@ create table if not exists users (
     money integer not null default 0,
     totalmoney integer not null default 0,
     tongnapthang integer not null default 0,
+    tongnapthang_reset_at timestamptz not null default now(),
     created_at timestamptz not null default now(),
     updated_at timestamptz not null default now()
 );
@@ -17,17 +18,18 @@ create table if not exists users (
 alter table users add column if not exists name varchar(255);
 alter table users add column if not exists email varchar(180);
 alter table users add column if not exists tongnapthang integer not null default 0;
+alter table users add column if not exists tongnapthang_reset_at timestamptz not null default now();
 alter table users add column if not exists created_at timestamptz not null default now();
 alter table users add column if not exists updated_at timestamptz not null default now();
 
 create unique index if not exists users_email_unique on users(email) where email is not null;
 
-insert into users (id, name, username, password, ban, is_active, type_admin, money, totalmoney, tongnapthang, created_at, updated_at)
+insert into users (id, name, username, password, ban, is_active, type_admin, money, totalmoney, tongnapthang, tongnapthang_reset_at, created_at, updated_at)
 values
-(1, 'admin', 'admin', '$2a$12$845CSTOCa.x5qoylH.DAeuUrwf92h1ywHlX8Nqzbq72j7QP0fNPr.', false, true, 99, 19990, 0, 0, now(), now()),
-(2, 'admin2', 'admin2', '$2a$12$845CSTOCa.x5qoylH.DAeuUrwf92h1ywHlX8Nqzbq72j7QP0fNPr.', false, true, 0, 7809999, 0, 0, now(), now()),
-(3, 'admin3', 'admin3', '$2a$12$845CSTOCa.x5qoylH.DAeuUrwf92h1ywHlX8Nqzbq72j7QP0fNPr.', false, true, 1, 0, 0, 0, now(), now()),
-(4, 'admin4', 'admin4', '$2a$12$845CSTOCa.x5qoylH.DAeuUrwf92h1ywHlX8Nqzbq72j7QP0fNPr.', false, true, 99, 0, 0, 0, now(), now())
+(1, 'admin', 'admin', '$2a$12$845CSTOCa.x5qoylH.DAeuUrwf92h1ywHlX8Nqzbq72j7QP0fNPr.', false, true, 99, 19990, 0, 0, now(), now(), now()),
+(2, 'admin2', 'admin2', '$2a$12$845CSTOCa.x5qoylH.DAeuUrwf92h1ywHlX8Nqzbq72j7QP0fNPr.', false, true, 0, 7809999, 0, 0, now(), now(), now()),
+(3, 'admin3', 'admin3', '$2a$12$845CSTOCa.x5qoylH.DAeuUrwf92h1ywHlX8Nqzbq72j7QP0fNPr.', false, true, 1, 0, 0, 0, now(), now(), now()),
+(4, 'admin4', 'admin4', '$2a$12$845CSTOCa.x5qoylH.DAeuUrwf92h1ywHlX8Nqzbq72j7QP0fNPr.', false, true, 99, 0, 0, 0, now(), now(), now())
 on conflict (username) do nothing;
 
 select setval(pg_get_serial_sequence('users', 'id'), greatest((select coalesce(max(id), 1) from users), 1), true);

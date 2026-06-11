@@ -22,6 +22,7 @@ class User extends Authenticatable
         'money',
         'totalmoney',
         'tongnapthang',
+        'tongnapthang_reset_at',
     ];
 
     protected $hidden = [
@@ -37,6 +38,7 @@ class User extends Authenticatable
             'money' => 'integer',
             'totalmoney' => 'integer',
             'tongnapthang' => 'integer',
+            'tongnapthang_reset_at' => 'datetime',
             'password' => 'hashed',
         ];
     }

@@ -23,6 +23,7 @@ return new class extends Migration
                 $table->integer('money')->default(0);
                 $table->integer('totalmoney')->default(0);
                 $table->integer('tongnapthang')->default(0);
+                $table->timestamp('tongnapthang_reset_at')->nullable();
                 $table->timestamps();
             });
         }
@@ -60,8 +61,12 @@ return new class extends Migration
                 $table->integer('tongnapthang')->default(0)->after('totalmoney');
             }
 
+            if (!Schema::hasColumn('users', 'tongnapthang_reset_at')) {
+                $table->timestamp('tongnapthang_reset_at')->nullable()->after('tongnapthang');
+            }
+
             if (!Schema::hasColumn('users', 'created_at')) {
-                $table->timestamp('created_at')->nullable()->after('tongnapthang');
+                $table->timestamp('created_at')->nullable()->after('tongnapthang_reset_at');
             }
 
             if (!Schema::hasColumn('users', 'updated_at')) {
@@ -193,6 +198,7 @@ return new class extends Migration
                 'money' => 0,
                 'totalmoney' => 0,
                 'tongnapthang' => 0,
+                'tongnapthang_reset_at' => now(),
                 'created_at' => now(),
                 'updated_at' => now(),
             ],

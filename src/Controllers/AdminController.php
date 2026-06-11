@@ -252,8 +252,8 @@ final class AdminController
             } else {
                 $data['password'] = password_hash($password, PASSWORD_BCRYPT);
                 Database::connection()->prepare(
-                    'insert into users (name, username, email, password, ban, is_active, type_admin, money, totalmoney, tongnapthang, created_at, updated_at)
-                     values (:name, :username, :email, :password, :ban, :is_active, :type_admin, :money, :totalmoney, :tongnapthang, now(), now())'
+                    'insert into users (name, username, email, password, ban, is_active, type_admin, money, totalmoney, tongnapthang, tongnapthang_reset_at, created_at, updated_at)
+                     values (:name, :username, :email, :password, :ban, :is_active, :type_admin, :money, :totalmoney, :tongnapthang, now(), now(), now())'
                 )->execute($data);
             }
         } catch (Throwable) {

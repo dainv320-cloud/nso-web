@@ -14,6 +14,8 @@ use Throwable;
 
 final class SiteController
 {
+    private const PAYMENT_REF_WIDTH = 3;
+
     private ContentRepository $content;
 
     public function __construct(?ContentRepository $content = null)
@@ -90,6 +92,7 @@ final class SiteController
             'account' => $account,
             'bankAccount' => $bankAccount,
             'amounts' => $this->depositAmounts(),
+            'paymentCode' => ($bankAccount && $account) ? $this->buildTransferContent($bankAccount, $account) : '',
             'effectiveRate' => $bankAccount ? $this->effectiveBankRate($bankAccount) : null,
             'activeCampaign' => $this->activePromotionCampaign(),
         ]);
@@ -139,7 +142,7 @@ final class SiteController
                 ], 404);
             }
 
-            $transferContent = strtoupper((string) $bankAccount['code']) . (string) $account['id'];
+            $transferContent = $this->buildTransferContent($bankAccount, $account);
             $effectiveRate = $this->effectiveBankRate($bankAccount);
             $activeCampaign = $this->activePromotionCampaign();
             $coinAmount = $this->coinAmount($amount, $effectiveRate);
@@ -587,8 +590,8 @@ final class SiteController
             }
 
             $statement = $connection->prepare(
-                'insert into users (name, username, email, password, ban, is_active, type_admin, money, totalmoney, tongnapthang, created_at, updated_at)
-                 values (:name, :username, :email, :password, false, true, 0, 0, 0, 0, now(), now())'
+                'insert into users (name, username, email, password, ban, is_active, type_admin, money, totalmoney, tongnapthang, tongnapthang_reset_at, created_at, updated_at)
+                 values (:name, :username, :email, :password, false, true, 0, 0, 0, 0, now(), now(), now())'
             );
             $statement->execute([
                 'name' => $username,
@@ -851,6 +854,15 @@ final class SiteController
         return (int) floor((float) $amount * $rate);
     }
 
+    private function buildTransferContent(array $bankAccount, array $account): string
+    {
+        $prefix = strtoupper(trim((string) ($bankAccount['code'] ?? '')));
+        $userId = max(0, (int) ($account['id'] ?? 0));
+        $paymentRef = random_int(0, 999);
+
+        return $prefix . $userId . str_pad((string) $paymentRef, self::PAYMENT_REF_WIDTH, '0', STR_PAD_LEFT);
+    }
+
     private function effectiveBankRate(array $bankAccount): float
     {
         $rate = (float) $bankAccount['bank_rate'];
@@ -946,22 +958,32 @@ final class SiteController
                 return;
             }
 
-            $user = $connection->prepare('select id from users where id = :id limit 1 for update');
+            $user = $connection->prepare('select id, tongnapthang, tongnapthang_reset_at from users where id = :id limit 1 for update');
             $user->execute(['id' => $userId]);
+            $userRow = $user->fetch();
 
-            if (!$user->fetch()) {
+            if (!$userRow) {
                 $connection->commit();
                 return;
             }
 
             $rate = $bankAccount ? $this->effectiveBankRate($bankAccount) : (float) env('PAYMENT_COIN_RATE', '1');
             $coinAmount = $this->coinAmount($amount, $rate);
+            $shouldResetMonthlyTotal = $this->shouldResetTongNapThang($userRow['tongnapthang_reset_at'] ?? null);
 
             $updateUser = $connection->prepare(
-                'update users set money = money + :coin_amount, totalmoney = totalmoney + :coin_amount, tongnapthang = tongnapthang + :coin_amount, updated_at = now() where id = :user_id'
+                'update users
+                 set money = money + :coin_amount,
+                     totalmoney = totalmoney + :deposit_amount,
+                     tongnapthang = :monthly_amount,
+                     tongnapthang_reset_at = now(),
+                     updated_at = now()
+                 where id = :user_id'
             );
             $updateUser->execute([
                 'coin_amount' => $coinAmount,
+                'deposit_amount' => $amount,
+                'monthly_amount' => ($shouldResetMonthlyTotal ? 0 : max(0, (int) ($userRow['tongnapthang'] ?? 0))) + (int) $amount,
                 'user_id' => $userId,
             ]);
 
@@ -1043,6 +1065,12 @@ final class SiteController
                 continue;
             }
 
+            $resolvedUserId = $this->extractUserIdFromTransferDigits((string) ($matches[2] ?? ''));
+
+            if ($resolvedUserId === null) {
+                continue;
+            }
+
             $matchedAccount = null;
 
             foreach ($bankAccounts as $account) {
@@ -1052,10 +1080,41 @@ final class SiteController
                 }
             }
 
-            return [(int) $matches[2], $matchedAccount];
+            return [$resolvedUserId, $matchedAccount];
         }
 
         return null;
+    }
+
+    private function extractUserIdFromTransferDigits(string $digits): ?int
+    {
+        if (!ctype_digit($digits) || strlen($digits) <= self::PAYMENT_REF_WIDTH) {
+            return null;
+        }
+
+        $userIdDigits = substr($digits, 0, -self::PAYMENT_REF_WIDTH);
+        $paymentRefDigits = substr($digits, -self::PAYMENT_REF_WIDTH);
+
+        if ($userIdDigits === '' || !ctype_digit($userIdDigits) || !ctype_digit($paymentRefDigits)) {
+            return null;
+        }
+
+        return max(0, (int) $userIdDigits) ?: null;
+    }
+
+    private function shouldResetTongNapThang(mixed $resetAt): bool
+    {
+        if (!$resetAt) {
+            return true;
+        }
+
+        $timestamp = strtotime((string) $resetAt);
+
+        if ($timestamp === false) {
+            return true;
+        }
+
+        return date('Y-m', $timestamp) !== date('Y-m');
     }
 
     private function moneyValue(mixed $value): float
