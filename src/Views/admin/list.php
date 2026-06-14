@@ -5,6 +5,7 @@ $actions = $actions ?? [];
 $hasActions = !empty($actions['edit']) || !empty($actions['delete']);
 $paymentToggleUrl = $paymentToggleUrl ?? null;
 $paymentEnabled = (bool) ($paymentEnabled ?? false);
+$featureToggles = $featureToggles ?? [];
 ob_start();
 ?>
 <section class="panel">
@@ -14,6 +15,14 @@ ob_start();
             <?php if (!empty($description)): ?><p><?= e($description) ?></p><?php endif; ?>
         </div>
         <div class="admin-actions">
+            <?php foreach ($featureToggles as $toggle): ?>
+                <form method="post" action="<?= e((string) ($toggle['url'] ?? '')) ?>">
+                    <input type="hidden" name="enabled" value="<?= !empty($toggle['enabled']) ? '0' : '1' ?>">
+                    <button class="btn <?= !empty($toggle['enabled']) ? 'secondary' : 'primary' ?>" type="submit">
+                        <?= e((string) ($toggle['enabled'] ? ($toggle['disableLabel'] ?? 'Tat') : ($toggle['enableLabel'] ?? 'Bat'))) ?>
+                    </button>
+                </form>
+            <?php endforeach; ?>
             <?php if (!empty($paymentToggleUrl)): ?>
                 <form method="post" action="<?= e($paymentToggleUrl) ?>">
                     <input type="hidden" name="enabled" value="<?= $paymentEnabled ? '0' : '1' ?>">
@@ -43,7 +52,7 @@ ob_start();
                 <tr>
                     <?php foreach ($columns as $column): ?>
                         <?php $value = $row[$column['key']] ?? ''; ?>
-                        <td>
+                        <td data-label="<?= e($column['label']) ?>">
                             <?php if (($column['format'] ?? '') === 'money'): ?>
                                 <?= number_format((float) $value, 0, ',', '.') ?>
                             <?php elseif (($column['format'] ?? '') === 'bool'): ?>
@@ -72,7 +81,7 @@ ob_start();
                         </td>
                     <?php endforeach; ?>
                     <?php if ($hasActions): ?>
-                        <td class="admin-actions">
+                        <td class="admin-actions" data-label="Thao tac">
                             <?php if (!empty($actions['edit'])): ?>
                                 <a class="btn secondary" href="<?= e(sprintf($actions['edit'], $row['id'])) ?>">Sua</a>
                             <?php endif; ?>

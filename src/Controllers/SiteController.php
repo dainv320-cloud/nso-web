@@ -16,6 +16,7 @@ final class SiteController
 {
     private const PAYMENT_REF_WIDTH = 3;
     private const ACTIVATION_DEPOSIT_AMOUNT = 20000;
+    private const REGISTER_BONUS_AMOUNT = 5000000;
     private const MONTHLY_RESET_COLUMN = 'tongNapThangResetAt';
     private const WEEKLY_RESET_COLUMN = 'tongNapTuanResetAt';
 
@@ -676,25 +677,27 @@ final class SiteController
 
             if ($this->usesModernUserSchema()) {
                 $statement = $connection->prepare(
-                    'insert into users (name, username, email, password, status, activated, active, role, tongnap, tongNapThang, tongNapTuan, quanew, created_at, updated_at)
-                     values (:name, :username, :email, :password, 1, 1, 1, 0, 0, 0, 0, 0, now(), now())'
+                    'insert into users (name, username, email, password, status, activated, active, role, balance, tongnap, tongNapThang, tongNapTuan, quanew, created_at, updated_at)
+                     values (:name, :username, :email, :password, 1, 1, 1, 0, :balance, 0, 0, 0, 0, now(), now())'
                 );
                 $statement->execute([
                     'name' => null,
                     'username' => $username,
                     'email' => $email !== '' ? $email : null,
                     'password' => password_hash($password, PASSWORD_BCRYPT),
+                    'balance' => $this->registerBonusAmount(),
                 ]);
             } else {
                 $statement = $connection->prepare(
                     'insert into users (name, username, email, password, ban, is_active, type_admin, money, totalmoney, tongnapthang, created_at, updated_at)
-                     values (:name, :username, :email, :password, 0, 1, 0, 0, 0, 0, now(), now())'
+                     values (:name, :username, :email, :password, 0, 1, 0, :money, 0, 0, now(), now())'
                 );
                 $statement->execute([
                     'name' => null,
                     'username' => $username,
                     'email' => $email !== '' ? $email : null,
                     'password' => password_hash($password, PASSWORD_BCRYPT),
+                    'money' => $this->registerBonusAmount(),
                 ]);
             }
             $account = [
@@ -867,6 +870,15 @@ final class SiteController
     private function paymentEnabled(): bool
     {
         return $this->databaseBool(env('PAYMENT_ENABLED', 'true'));
+    }
+
+    private function registerBonusAmount(): int
+    {
+        if (!$this->databaseBool(env('REGISTER_BONUS_ENABLED', 'true'))) {
+            return 0;
+        }
+
+        return self::REGISTER_BONUS_AMOUNT;
     }
 
     private function accountForUsername(string $username): ?array
