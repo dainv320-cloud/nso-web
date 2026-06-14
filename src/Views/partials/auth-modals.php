@@ -7,6 +7,7 @@ $authIcons = [
     'eye' => 'https://cdn-icons-png.flaticon.com/512/709/709612.png',
 ];
 $forgotStep = $forgotStep ?? 'request';
+$registerValues = is_array($registerValues ?? null) ? $registerValues : [];
 ?>
 
 <div class="auth-modal-backdrop <?= $authModal ? 'is-open' : '' ?>" data-auth-backdrop aria-hidden="<?= $authModal ? 'false' : 'true' ?>">
@@ -118,6 +119,9 @@ $forgotStep = $forgotStep ?? 'request';
             <p>Tạo tài khoản để bắt đầu hành trình ninja.</p>
         </header>
         <div class="auth-modal-body">
+            <?php if (!empty($registerError)): ?>
+                <div class="alert error"><?= e($registerError) ?></div>
+            <?php endif; ?>
             <?php if (!empty($registerSubmitted)): ?>
                 <div class="alert success">Đăng ký thành công. Bạn có thể đăng nhập ngay.</div>
             <?php endif; ?>
@@ -126,16 +130,18 @@ $forgotStep = $forgotStep ?? 'request';
                     Tên đăng nhập
                     <span class="input-wrap">
                         <span aria-hidden="true"><img src="<?= e($authIcons['user']) ?>" alt=""></span>
-                        <input name="username" minlength="3" autocomplete="username" placeholder="Tên đăng nhập" required>
+                        <input name="username" minlength="3" maxlength="30" autocomplete="username" placeholder="Tên đăng nhập" value="<?= e((string) ($registerValues['username'] ?? '')) ?>" required>
                     </span>
+                    <small class="form-hint">Chỉ gồm chữ, số hoặc dấu gạch dưới. Tối đa 30 ký tự.</small>
                 </label>
                 <label>
                     Email 
                     <span class="text-ninja-text-muted text-xs font-normal">(Không bắt buộc)</span>
                     <span class="input-wrap">
                         <span aria-hidden="true"><img src="<?= e($authIcons['mail']) ?>" alt=""></span>
-                        <input name="email" type="email" autocomplete="email" placeholder="Email nếu có">
+                        <input name="email" type="email" maxlength="20" autocomplete="email" placeholder="Email nếu có" value="<?= e((string) ($registerValues['email'] ?? '')) ?>">
                     </span>
+                    <small class="form-hint">Theo bảng user hiện tại, email tối đa 20 ký tự.</small>
                 </label>
                 <label>
                     Mật khẩu

@@ -15,8 +15,12 @@ use Throwable;
 final class SiteController
 {
     private const PAYMENT_REF_WIDTH = 3;
+    private const ACTIVATION_DEPOSIT_AMOUNT = 20000;
+    private const MONTHLY_RESET_COLUMN = 'tongNapThangResetAt';
+    private const WEEKLY_RESET_COLUMN = 'tongNapTuanResetAt';
 
     private ContentRepository $content;
+    private ?array $userTableSchema = null;
 
     public function __construct(?ContentRepository $content = null)
     {
@@ -111,7 +115,7 @@ final class SiteController
             exit;
         }
 
-        $amount = (int) ($_POST['amount'] ?? 0);
+        $amount = (int) $this->moneyValue($_POST['amount'] ?? null);
         $bankId = (int) ($_POST['bank_account_id'] ?? 0);
         $amounts = $this->depositAmounts();
         $bankAccount = $this->activeBankAccount($bankId > 0 ? $bankId : null);
@@ -202,6 +206,71 @@ final class SiteController
             Response::json([
                 'status' => false,
                 'msg' => 'Cannot process webhook right now',
+            ], 500);
+        }
+    }
+
+    public function paymentStatus(): never
+    {
+        if (!$this->paymentEnabled()) {
+            $this->notFound();
+        }
+
+        $user = $_SESSION['user'] ?? null;
+
+        if (!$user || empty($user['username'])) {
+            Response::json([
+                'status' => false,
+                'paid' => false,
+                'message' => 'Unauthorized',
+            ], 401);
+        }
+
+        $paymentCode = strtoupper(trim((string) ($_GET['code'] ?? '')));
+
+        if ($paymentCode === '') {
+            Response::json([
+                'status' => false,
+                'paid' => false,
+                'message' => 'Missing payment code',
+            ], 422);
+        }
+
+        try {
+            $account = $this->accountForUsername((string) $user['username']);
+
+            if (!$account) {
+                Response::json([
+                    'status' => false,
+                    'paid' => false,
+                    'message' => 'Account not found',
+                ], 404);
+            }
+
+            $statement = Database::connection()->prepare(
+                'select id, amount, balance, trans_id, created_at
+                 from payments
+                 where user_id = :user_id
+                   and trans_id = :trans_id
+                 order by id desc
+                 limit 1'
+            );
+            $statement->execute([
+                'user_id' => (int) $account['id'],
+                'trans_id' => $paymentCode,
+            ]);
+            $payment = $statement->fetch();
+
+            Response::json([
+                'status' => true,
+                'paid' => (bool) $payment,
+                'payment' => $payment ?: null,
+            ]);
+        } catch (Throwable) {
+            Response::json([
+                'status' => false,
+                'paid' => false,
+                'message' => 'Cannot check payment right now',
             ], 500);
         }
     }
@@ -502,7 +571,7 @@ final class SiteController
                 ]), 401);
             }
 
-            if ($this->databaseBool($account['ban'] ?? false) || !$this->databaseBool($account['is_active'] ?? true)) {
+            if (!$this->isAccountAccessible($account)) {
                 View::render('home', $this->homePayload([
                     'title' => "\u{0110}\u{0103}ng nh\u{1EAD}p t\u{00E0}i kho\u{1EA3}n Ninja School Blue",
                     'authModal' => 'login',
@@ -536,6 +605,10 @@ final class SiteController
             'authModal' => 'register',
             'registerError' => null,
             'registerSubmitted' => false,
+            'registerValues' => [
+                'username' => '',
+                'email' => '',
+            ],
             'captchaQuestion' => $this->newCaptchaQuestion(),
         ]));
     }
@@ -548,12 +621,16 @@ final class SiteController
         $confirmPassword = trim((string) ($_POST['confirm_password'] ?? ''));
         $captcha = trim((string) ($_POST['captcha'] ?? ''));
         $captchaAnswer = (string) ($_SESSION['register_captcha_answer'] ?? '');
+        $usernameMaxLength = $this->userColumnLength('username', 30);
+        $emailMaxLength = $this->userColumnLength('email', 20);
 
         if (
             $username === ''
             || strlen($username) < 3
+            || strlen($username) > $usernameMaxLength
             || !preg_match('/^[A-Za-z0-9_]{3,50}$/', $username)
             || ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL))
+            || strlen($email) > $emailMaxLength
             || strlen($password) < 6
             || $password !== $confirmPassword
             || $captcha === ''
@@ -563,7 +640,11 @@ final class SiteController
                 'title' => "\u{0110}\u{0103}ng k\u{00FD} t\u{00E0}i kho\u{1EA3}n Ninja School Blue",
                 'authModal' => 'register',
                 'registerSubmitted' => false,
-                'registerError' => "Ki\u{1EC3}m tra l\u{1EA1}i t\u{00EA}n t\u{00E0}i kho\u{1EA3}n, email n\u{1EBF}u c\u{00F3}, m\u{1EAD}t kh\u{1EA9}u t\u{1ED1}i thi\u{1EC3}u 6 k\u{00FD} t\u{1EF1} v\u{00E0} captcha.",
+                'registerError' => "Ki\u{1EC3}m tra l\u{1EA1}i t\u{00EA}n t\u{00E0}i kho\u{1EA3}n (3-{$usernameMaxLength} k\u{00FD} t\u{1EF1}), email n\u{1EBF}u c\u{00F3} kh\u{00F4}ng qu\u{00E1} {$emailMaxLength} k\u{00FD} t\u{1EF1}, m\u{1EAD}t kh\u{1EA9}u t\u{1ED1}i thi\u{1EC3}u 6 k\u{00FD} t\u{1EF1} v\u{00E0} captcha.",
+                'registerValues' => [
+                    'username' => $username,
+                    'email' => $email,
+                ],
                 'captchaQuestion' => $this->newCaptchaQuestion(),
             ]), 422);
         }
@@ -585,30 +666,51 @@ final class SiteController
                     'authModal' => 'register',
                     'registerSubmitted' => false,
                     'registerError' => "T\u{00EA}n \u{0111}\u{0103}ng nh\u{1EAD}p ho\u{1EB7}c email \u{0111}\u{00E3} t\u{1ED3}n t\u{1EA1}i.",
+                    'registerValues' => [
+                        'username' => $username,
+                        'email' => $email,
+                    ],
                     'captchaQuestion' => $this->newCaptchaQuestion(),
                 ]), 409);
             }
 
-            $statement = $connection->prepare(
-                'insert into users (name, username, email, password, ban, is_active, type_admin, money, totalmoney, tongnapthang, tongnapthang_reset_at, created_at, updated_at)
-                 values (:name, :username, :email, :password, false, true, 0, 0, 0, 0, now(), now(), now())'
-            );
-            $statement->execute([
-                'name' => $username,
-                'username' => $username,
-                'email' => $email !== '' ? $email : null,
-                'password' => password_hash($password, PASSWORD_BCRYPT),
-            ]);
+            if ($this->usesModernUserSchema()) {
+                $statement = $connection->prepare(
+                    'insert into users (name, username, email, password, status, activated, active, role, tongnap, tongNapThang, tongNapTuan, quanew, created_at, updated_at)
+                     values (:name, :username, :email, :password, 0, 0, 0, 0, 0, 0, 0, 0, now(), now())'
+                );
+                $statement->execute([
+                    'name' => null,
+                    'username' => $username,
+                    'email' => $email !== '' ? $email : null,
+                    'password' => password_hash($password, PASSWORD_BCRYPT),
+                ]);
+            } else {
+                $statement = $connection->prepare(
+                    'insert into users (name, username, email, password, ban, is_active, type_admin, money, totalmoney, tongnapthang, created_at, updated_at)
+                     values (:name, :username, :email, :password, 0, 0, 0, 0, 0, 0, now(), now())'
+                );
+                $statement->execute([
+                    'name' => null,
+                    'username' => $username,
+                    'email' => $email !== '' ? $email : null,
+                    'password' => password_hash($password, PASSWORD_BCRYPT),
+                ]);
+            }
             $account = [
                 'id' => (int) $connection->lastInsertId(),
                 'username' => $username,
             ];
-        } catch (Throwable) {
+        } catch (Throwable $exception) {
             View::render('home', $this->homePayload([
                 'title' => "\u{0110}\u{0103}ng k\u{00FD} t\u{00E0}i kho\u{1EA3}n Ninja School Blue",
                 'authModal' => 'register',
                 'registerSubmitted' => false,
-                'registerError' => "Kh\u{00F4}ng th\u{1EC3} t\u{1EA1}o t\u{00E0}i kho\u{1EA3}n l\u{00FA}c n\u{00E0}y. Vui l\u{00F2}ng ki\u{1EC3}m tra database.",
+                'registerError' => $this->databaseErrorMessage("Kh\u{00F4}ng th\u{1EC3} t\u{1EA1}o t\u{00E0}i kho\u{1EA3}n l\u{00FA}c n\u{00E0}y. Vui l\u{00F2}ng ki\u{1EC3}m tra database.", $exception),
+                'registerValues' => [
+                    'username' => $username,
+                    'email' => $email,
+                ],
                 'captchaQuestion' => $this->newCaptchaQuestion(),
             ]), 500);
         }
@@ -692,9 +794,7 @@ final class SiteController
         $username = (string) ($sessionUser['username'] ?? '');
 
         try {
-            $statement = Database::connection()->prepare(
-                'select id, name, username, email, ban, is_active, type_admin, money, totalmoney, tongnapthang, created_at, updated_at from users where username = :username limit 1'
-            );
+            $statement = Database::connection()->prepare($this->accountProfileQuery());
             $statement->execute(['username' => $username]);
             $account = $statement->fetch();
 
@@ -712,11 +812,17 @@ final class SiteController
             'id' => $sessionUser['id'] ?? null,
             'username' => $username,
             'email' => null,
-            'ban' => false,
-            'is_active' => true,
-            'type_admin' => 0,
+            'status' => 1,
+            'activated' => 1,
+            'active' => 1,
+            'role' => 0,
+            'tongnap' => 0,
+            'tongNapThang' => 0,
+            'tongNapTuan' => 0,
+            'quanew' => 0,
             'money' => 0,
             'totalmoney' => 0,
+            'ban' => 0,
         ];
     }
 
@@ -742,9 +848,7 @@ final class SiteController
 
     private function accountWithPassword(string $username): ?array
     {
-        $statement = Database::connection()->prepare(
-            'select id, username, password, ban, is_active from users where lower(username) = lower(:username) limit 1'
-        );
+        $statement = Database::connection()->prepare($this->accountWithPasswordQuery());
         $statement->execute(['username' => $username]);
         $account = $statement->fetch();
 
@@ -943,22 +1047,30 @@ final class SiteController
             return;
         }
 
-        [$userId, $bankAccount] = $match;
+        [$userId, $bankAccount, $transferCode] = $match;
         $connection = Database::connection();
         $rawPayload = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}';
 
         $connection->beginTransaction();
 
         try {
-            $exists = $connection->prepare('select id from payments where transaction_id = :transaction_id limit 1');
-            $exists->execute(['transaction_id' => $transactionId]);
+            $exists = $connection->prepare('select id from payments where trans_id = :trans_id limit 1');
+            $exists->execute(['trans_id' => $transferCode]);
 
             if ($exists->fetch()) {
                 $connection->commit();
                 return;
             }
 
-            $user = $connection->prepare('select id, tongnapthang, tongnapthang_reset_at from users where id = :id limit 1 for update');
+            $user = $connection->prepare(
+                'select id, username, balance, tongnap, tongNapThang, tongNapTuan, '
+                . self::MONTHLY_RESET_COLUMN . ', '
+                . self::WEEKLY_RESET_COLUMN . '
+                 from users
+                 where id = :id
+                 limit 1
+                 for update'
+            );
             $user->execute(['id' => $userId]);
             $userRow = $user->fetch();
 
@@ -969,38 +1081,29 @@ final class SiteController
 
             $rate = $bankAccount ? $this->effectiveBankRate($bankAccount) : (float) env('PAYMENT_COIN_RATE', '1');
             $coinAmount = $this->coinAmount($amount, $rate);
-            $shouldResetMonthlyTotal = $this->shouldResetTongNapThang($userRow['tongnapthang_reset_at'] ?? null);
-
-            $updateUser = $connection->prepare(
-                'update users
-                 set money = money + :coin_amount,
-                     totalmoney = totalmoney + :deposit_amount,
-                     tongnapthang = :monthly_amount,
-                     tongnapthang_reset_at = now(),
-                     updated_at = now()
-                 where id = :user_id'
-            );
-            $updateUser->execute([
-                'coin_amount' => $coinAmount,
-                'deposit_amount' => $amount,
-                'monthly_amount' => ($shouldResetMonthlyTotal ? 0 : max(0, (int) ($userRow['tongnapthang'] ?? 0))) + (int) $amount,
-                'user_id' => $userId,
-            ]);
+            $this->applySuccessfulDeposit($connection, $userRow, $amount, $coinAmount);
+            $this->activateUserOnEligibleDeposit($connection, $userId, $amount);
 
             $payment = $connection->prepare(
-                'insert into payments (user_id, bank_account_id, transaction_id, bank, type, amount, coin_amount, description, raw_payload)
-                 values (:user_id, :bank_account_id, :transaction_id, :bank, :type, :amount, :coin_amount, :description, :raw_payload)'
+                'insert into payments (user_id, currency_id, type, amount, balance, description, extra, created_at, updated_at, trans_id, player_name, received)
+                 values (:user_id, :currency_id, :type, :amount, :balance, :description, :extra, now(), now(), :trans_id, :player_name, :received)'
             );
             $payment->execute([
                 'user_id' => $userId,
-                'bank_account_id' => $bankAccount['id'] ?? null,
-                'transaction_id' => $transactionId,
-                'bank' => $bank,
-                'type' => 'IN',
+                'currency_id' => 'VND',
+                'type' => 1,
                 'amount' => $amount,
-                'coin_amount' => $coinAmount,
-                'description' => $description,
-                'raw_payload' => $rawPayload,
+                'balance' => max(0, (int) ($userRow['balance'] ?? 0)) + $coinAmount,
+                'description' => 'Nap tien thanh cong qua VietQR: ' . $description,
+                'extra' => json_encode([
+                    'bank_transaction_id' => $transactionId,
+                    'bank' => $bank,
+                    'coin_amount' => $coinAmount,
+                    'raw_payload' => json_decode($rawPayload, true),
+                ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                'trans_id' => $transferCode,
+                'player_name' => (string) ($userRow['username'] ?? ''),
+                'received' => 1,
             ]);
             $paymentId = (int) $connection->lastInsertId();
 
@@ -1080,7 +1183,7 @@ final class SiteController
                 }
             }
 
-            return [$resolvedUserId, $matchedAccount];
+            return [$resolvedUserId, $matchedAccount, strtoupper((string) $matches[1] . (string) $matches[2])];
         }
 
         return null;
@@ -1117,9 +1220,24 @@ final class SiteController
         return date('Y-m', $timestamp) !== date('Y-m');
     }
 
+    private function shouldResetTongNapTuan(mixed $resetAt): bool
+    {
+        if (!$resetAt) {
+            return true;
+        }
+
+        $timestamp = strtotime((string) $resetAt);
+
+        if ($timestamp === false) {
+            return true;
+        }
+
+        return date('o-W', $timestamp) !== date('o-W');
+    }
+
     private function moneyValue(mixed $value): float
     {
-        $normalized = str_replace([',', ' ', 'VND', 'vnd'], '', (string) $value);
+        $normalized = str_replace(['.', ',', ' ', 'VND', 'vnd'], '', (string) $value);
 
         return is_numeric($normalized) ? (float) $normalized : 0.0;
     }
@@ -1184,5 +1302,149 @@ final class SiteController
         Mail::to($email)->send(new PasswordOtpMail($otp, 10));
 
         return true;
+    }
+
+    private function databaseErrorMessage(string $fallback, ?Throwable $exception = null): string
+    {
+        if (!in_array(strtolower((string) env('APP_DEBUG', 'false')), ['1', 'true', 't', 'yes', 'y'], true)) {
+            return $fallback;
+        }
+
+        if (!$exception) {
+            return $fallback;
+        }
+
+        return $fallback . ' Chi tiet: ' . $exception->getMessage();
+    }
+
+    private function userTableSchema(): array
+    {
+        if ($this->userTableSchema !== null) {
+            return $this->userTableSchema;
+        }
+
+        try {
+            $rows = Database::connection()->query('show columns from users')->fetchAll();
+            $schema = [];
+
+            foreach ($rows as $row) {
+                $field = strtolower((string) ($row['Field'] ?? ''));
+
+                if ($field !== '') {
+                    $schema[$field] = $row;
+                }
+            }
+
+            $this->userTableSchema = $schema;
+        } catch (Throwable) {
+            $this->userTableSchema = [];
+        }
+
+        return $this->userTableSchema;
+    }
+
+    private function usesModernUserSchema(): bool
+    {
+        $schema = $this->userTableSchema();
+
+        return isset($schema['status'], $schema['active'], $schema['role']);
+    }
+
+    private function userColumnLength(string $column, int $default): int
+    {
+        $schema = $this->userTableSchema();
+        $type = (string) ($schema[strtolower($column)]['Type'] ?? '');
+
+        if (preg_match('/varchar\((\d+)\)/i', $type, $matches)) {
+            return (int) $matches[1];
+        }
+
+        return $default;
+    }
+
+    private function accountWithPasswordQuery(): string
+    {
+        if ($this->usesModernUserSchema()) {
+            return 'select id, username, password, status, activated, active, role from users where lower(username) = lower(:username) limit 1';
+        }
+
+        return 'select id, username, password, ban, is_active, type_admin from users where lower(username) = lower(:username) limit 1';
+    }
+
+    private function accountProfileQuery(): string
+    {
+        if ($this->usesModernUserSchema()) {
+            return 'select id, name, username, email, status, activated, active, role, balance, tongnap, tongNapThang, tongNapTuan, quanew, balance as money, tongnap as totalmoney, case when status = 2 or active = 0 then 1 else 0 end as ban, created_at, updated_at from users where username = :username limit 1';
+        }
+
+        return 'select id, name, username, email, 1 as status, 1 as activated, is_active as active, type_admin as role, totalmoney as tongnap, tongnapthang as tongNapThang, 0 as tongNapTuan, money as quanew, money, totalmoney, ban, created_at, updated_at from users where username = :username limit 1';
+    }
+
+    private function isAccountAccessible(array $account): bool
+    {
+        if ($this->usesModernUserSchema()) {
+            return (int) ($account['status'] ?? 1) !== 2
+                && $this->databaseBool($account['active'] ?? true);
+        }
+
+        return !$this->databaseBool($account['ban'] ?? false)
+            && $this->databaseBool($account['is_active'] ?? true);
+    }
+
+    private function applySuccessfulDeposit(\PDO $connection, array $userRow, float $amount, int $coinAmount): void
+    {
+        $connection->prepare(
+            'update users
+             set balance = :balance,
+                 tongnap = :tongnap,
+                 tongNapThang = :tong_nap_thang,
+                 tongNapTuan = :tong_nap_tuan,
+                 ' . self::MONTHLY_RESET_COLUMN . ' = :monthly_reset_at,
+                 ' . self::WEEKLY_RESET_COLUMN . ' = :weekly_reset_at,
+                 updated_at = now()
+             where id = :user_id'
+        )->execute([
+            'balance' => max(0, (int) ($userRow['balance'] ?? 0)) + $coinAmount,
+            'tongnap' => max(0, (int) ($userRow['tongnap'] ?? 0)) + (int) $amount,
+            'tong_nap_thang' => $this->nextMonthlyDepositTotal($userRow, $amount),
+            'tong_nap_tuan' => $this->nextWeeklyDepositTotal($userRow, $amount),
+            'monthly_reset_at' => date('Y-m-d H:i:s'),
+            'weekly_reset_at' => date('Y-m-d H:i:s'),
+            'user_id' => (int) ($userRow['id'] ?? 0),
+        ]);
+    }
+
+    private function activateUserOnEligibleDeposit(\PDO $connection, int $userId, float $amount): void
+    {
+        if ($amount < self::ACTIVATION_DEPOSIT_AMOUNT) {
+            return;
+        }
+
+        $connection->prepare(
+            'update users
+             set status = 1,
+                 activated = 1,
+                 active = 1,
+                 updated_at = now()
+             where id = :id'
+        )->execute(['id' => $userId]);
+    }
+
+    private function nextMonthlyDepositTotal(array $userRow, float $amount): int
+    {
+        $current = $this->shouldResetTongNapThang($userRow[self::MONTHLY_RESET_COLUMN] ?? null)
+            ? 0
+            : max(0, (int) ($userRow['tongNapThang'] ?? 0));
+
+        return $current + (int) $amount;
+    }
+
+    private function nextWeeklyDepositTotal(array $userRow, float $amount): int
+    {
+        $current = $this->shouldResetTongNapTuan($userRow[self::WEEKLY_RESET_COLUMN] ?? null)
+            ? 0
+            : max(0, (int) ($userRow['tongNapTuan'] ?? 0));
+
+        return $current + (int) $amount;
     }
 }

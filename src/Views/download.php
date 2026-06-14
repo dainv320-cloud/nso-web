@@ -42,6 +42,27 @@
                     </dl>
                     <a class="btn primary download-version-button" href="/file/ninja_217.jar" download>Tải xuống</a>
                 </article>
+                <article class="download-version-card">
+                    <span class="download-version-icon download-version-icon-download">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 3a1 1 0 0 1 1 1v8.59l2.3-2.3a1 1 0 1 1 1.4 1.42l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 1 1 1.4-1.42l2.3 2.3V4a1 1 0 0 1 1-1ZM5 18a1 1 0 0 1 1 1h12a1 1 0 1 1 0 2H6a1 1 0 0 1-1-1Z"/></svg>
+                    </span>
+                    <h2>AngelChipEmulatorEXE</h2>
+                    <dl>
+                        <div>
+                            <dt>Phiên bản:</dt>
+                            <dd>1.1.0</dd>
+                        </div>
+                        <div>
+                            <dt>Dung lượng:</dt>
+                            <dd>60</dd>
+                        </div>
+                        <div>
+                            <dt>Yêu cầu:</dt>
+                            <dd>win 7 trở lên.</dd>
+                        </div>
+                    </dl>
+                    <a class="btn primary download-version-button" href="/file/AngelChipEmulator.zip" download>Tải xuống</a>
+                </article>
             </div>
         </details>  
 

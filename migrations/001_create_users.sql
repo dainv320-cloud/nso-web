@@ -1,55 +1,79 @@
-create table if not exists users (
-    id bigserial primary key,
-    username varchar(50) not null unique,
-    email varchar(180),
-    password varchar(255) not null,
-    ban boolean not null default false,
-    is_active boolean not null default true,
-    type_admin smallint not null default 0,
-    money integer not null default 0,
-    totalmoney integer not null default 0
-);
+CREATE TABLE `users`  (
+  `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT,
+  `username` varchar(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+  `password` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+  `name` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT NULL,
+  `phone` varchar(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT NULL,
+  `otp` varchar(6) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT NULL,
+  `email` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT NULL,
+  `status` int NULL DEFAULT 1 COMMENT '0: Deactivate, 1: Active, 2: Block',
+  `activated` int NULL DEFAULT 0 COMMENT '0: Chưa kh\r\n1: Đã kh',
+  `active` int NOT NULL DEFAULT 0,
+  `kh` int NOT NULL DEFAULT 0 COMMENT '0: Deactive,\r\n1: Active',
+  `remember_token` varchar(225) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT NULL,
+  `balance` int NOT NULL DEFAULT 0,
+  `luong` int NOT NULL DEFAULT 0,
+  `amount_unpaid` int NOT NULL DEFAULT 0,
+  `online` tinyint(1) NOT NULL DEFAULT 0,
+  `role` int NULL DEFAULT NULL,
+  `group_id` int NOT NULL DEFAULT 1,
+  `last_login_at` timestamp NULL DEFAULT NULL,
+  `received_first_gift` int NOT NULL DEFAULT 0,
+  `last_attendance_at` bigint NULL DEFAULT 0,
+  `ip_address` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NULL,
+  `level_reward` varchar(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL DEFAULT '[0,0,0,0,0]',
+  `note` text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL,
+  `ban_until` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT current_timestamp,
+  `updated_at` timestamp NULL DEFAULT current_timestamp,
+  `tongnap` int NOT NULL DEFAULT 0,
+  `tongNapThang` int NOT NULL DEFAULT 0,
+  `tongNapTuan` int NOT NULL DEFAULT 0,
+  `tongNapThangResetAt` datetime NULL DEFAULT NULL,
+  `tongNapTuanResetAt` datetime NULL DEFAULT NULL,
+  `topGT` int NOT NULL DEFAULT 0,
+  `isVIP` int NOT NULL DEFAULT 0,
+  `quanew` int NOT NULL DEFAULT 0,
+  `magioithieu` text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL,
+  `countGT` int NOT NULL DEFAULT 0,
+  `rewardtop` int NOT NULL DEFAULT 0,
+  `mocnap` varchar(35) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL DEFAULT '[0,0,0,0,0,0,0]',
+  `streamer` int NOT NULL DEFAULT 0,
+  `gdv` int NOT NULL DEFAULT 0,
+  `goiTanThu` varchar(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL DEFAULT '[0,0,0,0,0,0,0,0,0]',
+  `newplay` int NOT NULL DEFAULT 0,
+  `vxmm` int NOT NULL DEFAULT 0,
+  `pointBosss` int NOT NULL DEFAULT 0,
+  `pointCauCa` int NOT NULL DEFAULT 0,
+  `veluong` int NOT NULL DEFAULT 0,
+  `luotGopHongBao` int NOT NULL DEFAULT 0,
+  `goinap` int NOT NULL DEFAULT 0,
+  `goiNap2` varchar(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '[0,0,0,0,0,0,0]',
+  `goiNap3` varchar(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL DEFAULT '[0,0,0,0,0,0,0]',
+  `activated_at` datetime NULL DEFAULT NULL,
+  `ip_web` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL,
+  `ip_register` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT NULL,
+  `mokhoa` int NOT NULL DEFAULT 1,
+  `countRename` int NOT NULL DEFAULT 1,
+  `realGold` bigint NULL DEFAULT 0,
+  `realCoin` bigint NOT NULL DEFAULT 0,
+  `moKhoaTam` int NOT NULL DEFAULT 0,
+  `win` int NOT NULL DEFAULT 0,
+  PRIMARY KEY (`id`) USING BTREE,
+  UNIQUE INDEX `id`(`id` ASC) USING BTREE,
+  UNIQUE INDEX `id_2`(`id` ASC) USING BTREE,
+  UNIQUE INDEX `id_3`(`id` ASC) USING BTREE,
+  INDEX `username`(`username` ASC) USING BTREE
+) ENGINE = InnoDB AUTO_INCREMENT = 5000 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_general_ci ROW_FORMAT = DYNAMIC;
 
-alter table users add column if not exists username varchar(50);
-alter table users add column if not exists name varchar(255);
-alter table users add column if not exists email varchar(180);
-alter table users add column if not exists password varchar(255);
-alter table users add column if not exists ban boolean not null default false;
-alter table users add column if not exists is_active boolean not null default true;
-alter table users add column if not exists type_admin smallint not null default 0;
-alter table users add column if not exists money integer not null default 0;
-alter table users add column if not exists totalmoney integer not null default 0;
+SET FOREIGN_KEY_CHECKS = 1;
 
-update users set username = 'user_' || id::text where username is null or username = '';
-update users set name = username where name is null or name = '';
-update users set email = username || '@example.local' where email is null or email = '';
-update users set password = '$2a$12$845CSTOCa.x5qoylH.DAeuUrwf92h1ywHlX8Nqzbq72j7QP0fNPr.' where password is null or password = '';
-
-alter table users alter column name set not null;
-alter table users alter column username set not null;
-alter table users alter column password set not null;
+create unique index if not exists users_email_unique on users(email) where email is not null
 
 create unique index if not exists users_username_unique on users(username);
 create unique index if not exists users_email_unique on users(email) where email is not null;
 
-insert into users (id, name, email, username, password, ban, is_active, type_admin, money, totalmoney)
-values
-(1, 'admin', 'admin@example.local', 'admin', '$2a$12$845CSTOCa.x5qoylH.DAeuUrwf92h1ywHlX8Nqzbq72j7QP0fNPr.', false, true, 99, 19990, 0),
-(2, 'admin2', 'admin2@example.local', 'admin2', '$2a$12$845CSTOCa.x5qoylH.DAeuUrwf92h1ywHlX8Nqzbq72j7QP0fNPr.', false, true, 0, 7809999, 0),
-(3, 'admin3', 'admin3@example.local', 'admin3', '$2a$12$845CSTOCa.x5qoylH.DAeuUrwf92h1ywHlX8Nqzbq72j7QP0fNPr.', false, true, 1, 0, 0),
-(4, 'admin4', 'admin4@example.local', 'admin4', '$2a$12$845CSTOCa.x5qoylH.DAeuUrwf92h1ywHlX8Nqzbq72j7QP0fNPr.', false, true, 99, 0, 0)
-on conflict (id) do update set
-    name = excluded.name,
-    email = excluded.email,
-    username = excluded.username,
-    password = excluded.password,
-    ban = excluded.ban,
-    is_active = excluded.is_active,
-    type_admin = excluded.type_admin,
-    money = excluded.money,
-    totalmoney = excluded.totalmoney;
 
-select setval(pg_get_serial_sequence('users', 'id'), greatest((select coalesce(max(id), 1) from users), 1), true);
 
 create table if not exists deposit_history (
     id bigserial primary key,

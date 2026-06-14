@@ -16,13 +16,15 @@ class User extends Authenticatable
         'username',
         'email',
         'password',
-        'ban',
-        'is_active',
-        'type_admin',
-        'money',
-        'totalmoney',
-        'tongnapthang',
-        'tongnapthang_reset_at',
+        'status',
+        'activated',
+        'active',
+        'role',
+        'balance',
+        'tongnap',
+        'tongNapThang',
+        'tongNapTuan',
+        'quanew',
     ];
 
     protected $hidden = [
@@ -33,12 +35,15 @@ class User extends Authenticatable
     protected function casts(): array
     {
         return [
-            'ban' => 'boolean',
-            'is_active' => 'boolean',
-            'money' => 'integer',
-            'totalmoney' => 'integer',
-            'tongnapthang' => 'integer',
-            'tongnapthang_reset_at' => 'datetime',
+            'status' => 'integer',
+            'activated' => 'boolean',
+            'active' => 'boolean',
+            'role' => 'integer',
+            'balance' => 'integer',
+            'tongnap' => 'integer',
+            'tongNapThang' => 'integer',
+            'tongNapTuan' => 'integer',
+            'quanew' => 'integer',
             'password' => 'hashed',
         ];
     }

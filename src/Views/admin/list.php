@@ -2,6 +2,7 @@
 $rows = $rows ?? [];
 $columns = $columns ?? [];
 $actions = $actions ?? [];
+$hasActions = !empty($actions['edit']) || !empty($actions['delete']);
 $paymentToggleUrl = $paymentToggleUrl ?? null;
 $paymentEnabled = (bool) ($paymentEnabled ?? false);
 ob_start();
@@ -9,7 +10,7 @@ ob_start();
 <section class="panel">
     <div class="admin-list-head">
         <div>
-            <h2><?= e($heading ?? 'Danh sách') ?></h2>
+            <h2><?= e($heading ?? 'Danh sach') ?></h2>
             <?php if (!empty($description)): ?><p><?= e($description) ?></p><?php endif; ?>
         </div>
         <div class="admin-actions">
@@ -17,12 +18,12 @@ ob_start();
                 <form method="post" action="<?= e($paymentToggleUrl) ?>">
                     <input type="hidden" name="enabled" value="<?= $paymentEnabled ? '0' : '1' ?>">
                     <button class="btn <?= $paymentEnabled ? 'secondary' : 'primary' ?>" type="submit">
-                        <?= $paymentEnabled ? 'Tắt nạp tiền' : 'Bật nạp tiền' ?>
+                        <?= $paymentEnabled ? 'Tat nap tien' : 'Bat nap tien' ?>
                     </button>
                 </form>
             <?php endif; ?>
             <?php if (!empty($createUrl)): ?>
-                <a class="btn primary" href="<?= e($createUrl) ?>">Thêm mới</a>
+                <a class="btn primary" href="<?= e($createUrl) ?>">Them moi</a>
             <?php endif; ?>
         </div>
     </div>
@@ -34,7 +35,7 @@ ob_start();
                 <?php foreach ($columns as $column): ?>
                     <th><?= e($column['label']) ?></th>
                 <?php endforeach; ?>
-                <th></th>
+                <?php if ($hasActions): ?><th></th><?php endif; ?>
             </tr>
             </thead>
             <tbody>
@@ -44,18 +45,25 @@ ob_start();
                         <?php $value = $row[$column['key']] ?? ''; ?>
                         <td>
                             <?php if (($column['format'] ?? '') === 'money'): ?>
-                                <?= number_format((float) $value) ?>
+                                <?= number_format((float) $value, 0, ',', '.') ?>
                             <?php elseif (($column['format'] ?? '') === 'bool'): ?>
-                                <?= in_array(strtolower((string) $value), ['1', 'true', 't', 'yes'], true) ? 'Có' : 'Không' ?>
+                                <?= in_array(strtolower((string) $value), ['1', 'true', 't', 'yes'], true) ? 'Co' : 'Khong' ?>
                             <?php elseif (($column['format'] ?? '') === 'datetime'): ?>
                                 <?php
                                 $time = strtotime((string) $value);
                                 echo $time ? e(date('d/m/Y H:i', $time)) : '-';
                                 ?>
+                            <?php elseif (($column['format'] ?? '') === 'user_status'): ?>
+                                <?= match ((int) $value) {
+                                    0 => 'Deactivate',
+                                    2 => 'Block',
+                                    default => 'Active',
+                                } ?>
                             <?php elseif (($column['format'] ?? '') === 'admin_role'): ?>
                                 <?= match ((int) $value) {
                                     0 => 'User',
-                                    2 => 'Cộng tác viên',
+                                    1 => 'CTV',
+                                    99 => 'Admin',
                                     default => 'Admin',
                                 } ?>
                             <?php else: ?>
@@ -63,14 +71,16 @@ ob_start();
                             <?php endif; ?>
                         </td>
                     <?php endforeach; ?>
-                    <td class="admin-actions">
-                        <?php if (!empty($actions['edit'])): ?>
-                            <a class="btn secondary" href="<?= e(sprintf($actions['edit'], $row['id'])) ?>">Sửa</a>
-                        <?php endif; ?>
-                        <?php if (!empty($actions['delete'])): ?>
-                            <a class="btn secondary" href="<?= e(sprintf($actions['delete'], $row['id'])) ?>">Xóa</a>
-                        <?php endif; ?>
-                    </td>
+                    <?php if ($hasActions): ?>
+                        <td class="admin-actions">
+                            <?php if (!empty($actions['edit'])): ?>
+                                <a class="btn secondary" href="<?= e(sprintf($actions['edit'], $row['id'])) ?>">Sua</a>
+                            <?php endif; ?>
+                            <?php if (!empty($actions['delete'])): ?>
+                                <a class="btn secondary" href="<?= e(sprintf($actions['delete'], $row['id'])) ?>">Xoa</a>
+                            <?php endif; ?>
+                        </td>
+                    <?php endif; ?>
                 </tr>
             <?php endforeach; ?>
             </tbody>

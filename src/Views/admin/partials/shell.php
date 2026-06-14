@@ -1,7 +1,7 @@
 <?php
 $section = $section ?? 'dashboard';
 $flash = $flash ?? null;
-$isCollaborator = (int) ($admin['type_admin'] ?? 0) === 2;
+$isCollaborator = (int) ($admin['role'] ?? 0) === 1;
 $adminMenu = $isCollaborator
     ? [
         'posts' => ['/admin/posts', 'Tin tức'],

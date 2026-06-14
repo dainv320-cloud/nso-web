@@ -12,8 +12,10 @@ use Throwable;
 
 final class AdminController
 {
-    private const ROLE_ADMIN = 1;
-    private const ROLE_COLLABORATOR = 2;
+    private const ROLE_ADMIN = 99;
+    private const ROLE_COLLABORATOR = 1;
+    private const ROLE_USER = 0;
+    private ?array $userTableSchema = null;
 
     public function login(): never
     {
@@ -41,18 +43,15 @@ final class AdminController
         }
 
         try {
-            $statement = Database::connection()->prepare(
-                'select id, username, password, ban, is_active, type_admin from users where lower(username) = lower(:username) limit 1'
-            );
+            $statement = Database::connection()->prepare($this->adminLoginQuery());
             $statement->execute(['username' => $username]);
             $account = $statement->fetch();
 
             if (
                 !$account
                 || !password_verify($password, (string) $account['password'])
-                || !$this->databaseBool($account['is_active'])
-                || $this->databaseBool($account['ban'])
-                || !$this->isAdminRole((int) $account['type_admin'])
+                || !$this->isUserAccessible($account)
+                || !$this->isAdminRole($account)
             ) {
                 View::render('admin-login', [
                     'title' => 'Admin Login',
@@ -107,9 +106,9 @@ final class AdminController
             'admin' => $admin,
             'section' => 'users',
             'heading' => 'Danh sach user',
-            'description' => 'Quan ly tai khoan, quyen, trang thai va so du nguoi choi.',
+            'description' => 'Quan ly cac truong hien tai cua bang users.',
             'createUrl' => '/admin/users/create',
-            'rows' => $this->fetchAll('select id, name, username, email, ban, is_active, type_admin, money, totalmoney, tongnapthang, created_at, updated_at from users order by id desc limit 200'),
+            'rows' => $this->fetchAll('select id, username, name, email, status, activated, active, role, balance, tongnap, tongNapThang, tongNapTuan, quanew from users order by id desc limit 200'),
             'columns' => [
                 ['key' => 'id', 'label' => 'ID'],
                 ['key' => 'name', 'label' => 'Hiển thị'],
@@ -127,17 +126,18 @@ final class AdminController
             ],
             'columns' => [
                 ['key' => 'id', 'label' => 'ID'],
-                ['key' => 'name', 'label' => 'Hien thi'],
-                ['key' => 'username', 'label' => 'User'],
+                ['key' => 'username', 'label' => 'Username'],
+                ['key' => 'name', 'label' => 'Name'],
                 ['key' => 'email', 'label' => 'Email'],
-                ['key' => 'is_active', 'label' => 'Kich hoat', 'format' => 'bool'],
-                ['key' => 'ban', 'label' => 'Ban', 'format' => 'bool'],
-                ['key' => 'money', 'label' => 'Coin', 'format' => 'money'],
-                ['key' => 'totalmoney', 'label' => 'Tong nap', 'format' => 'money'],
-                ['key' => 'tongnapthang', 'label' => 'Nap thang', 'format' => 'money'],
-                ['key' => 'type_admin', 'label' => 'Quyen', 'format' => 'admin_role'],
-                ['key' => 'created_at', 'label' => 'Tao luc', 'format' => 'datetime'],
-                ['key' => 'updated_at', 'label' => 'Cap nhat', 'format' => 'datetime'],
+                ['key' => 'status', 'label' => 'Status', 'format' => 'user_status'],
+                ['key' => 'activated', 'label' => 'Activated', 'format' => 'bool'],
+                ['key' => 'active', 'label' => 'Active', 'format' => 'bool'],
+                ['key' => 'role', 'label' => 'Role', 'format' => 'admin_role'],
+                ['key' => 'balance', 'label' => 'Balance', 'format' => 'money'],
+                ['key' => 'tongnap', 'label' => 'Tong nap', 'format' => 'money'],
+                ['key' => 'tongNapThang', 'label' => 'Tong nap thang', 'format' => 'money'],
+                ['key' => 'tongNapTuan', 'label' => 'Tong nap tuan', 'format' => 'money'],
+                ['key' => 'quanew', 'label' => 'Qua new', 'format' => 'money'],
             ],
             'actions' => ['edit' => '/admin/users/%s/edit', 'delete' => '/admin/users/%s/delete'],
             'flash' => $this->pullFlash(),
@@ -160,18 +160,21 @@ final class AdminController
             'heading' => $id ? "S\u{1EED}a user" : "Th\u{00EA}m user",
             'backUrl' => '/admin/users',
             'actionUrl' => '/admin/users/save',
-            'row' => $row ?? ['is_active' => true, 'tongnapthang' => 0],
+            'row' => $row ?? ['status' => 1, 'activated' => 1, 'active' => 1, 'role' => self::ROLE_USER, 'balance' => 0, 'tongnap' => 0, 'tongNapThang' => 0, 'tongNapTuan' => 0, 'quanew' => 0],
             'fields' => [
-                ['name' => 'username', 'label' => "T\u{00EA}n \u{0111}\u{0103}ng nh\u{1EAD}p", 'required' => true],
-                ['name' => 'name', 'label' => "T\u{00EA}n hi\u{1EC3}n th\u{1ECB}"],
+                ['name' => 'username', 'label' => 'Username', 'required' => true],
+                ['name' => 'name', 'label' => 'Name'],
                 ['name' => 'email', 'label' => 'Email', 'type' => 'email'],
-                ['name' => 'password', 'label' => $id ? "M\u{1EAD}t kh\u{1EA9}u m\u{1EDB}i, b\u{1ECF} tr\u{1ED1}ng n\u{1EBF}u kh\u{00F4}ng \u{0111}\u{1ED5}i" : "M\u{1EAD}t kh\u{1EA9}u", 'type' => 'password', 'required' => !$id],
-                ['name' => 'money', 'label' => 'Coin', 'type' => 'number', 'min' => 0],
-                ['name' => 'totalmoney', 'label' => "T\u{1ED5}ng n\u{1EA1}p", 'type' => 'number', 'min' => 0],
-                ['name' => 'tongnapthang', 'label' => "T\u{1ED5}ng n\u{1EA1}p th\u{00E1}ng", 'type' => 'number', 'min' => 0],
-                ['name' => 'type_admin', 'label' => "Quy\u{1EC1}n", 'type' => 'select', 'options' => $this->userRoleOptions($row)],
-                ['name' => 'is_active', 'label' => 'Active', 'type' => 'checkbox', 'checked' => !$id],
-                ['name' => 'ban', 'label' => 'Ban', 'type' => 'checkbox'],
+                ['name' => 'password', 'label' => $id ? 'Password moi, bo trong neu khong doi' : 'Password', 'type' => 'password', 'required' => !$id],
+                ['name' => 'status', 'label' => 'Status', 'type' => 'select', 'options' => $this->userStatusOptions()],
+                ['name' => 'activated', 'label' => 'Activated', 'type' => 'checkbox', 'checked' => !$id],
+                ['name' => 'active', 'label' => 'Active', 'type' => 'checkbox', 'checked' => !$id],
+                ['name' => 'role', 'label' => 'Role', 'type' => 'select', 'options' => $this->userRoleOptions()],
+                ['name' => 'balance', 'label' => 'Balance', 'type' => 'money'],
+                ['name' => 'tongnap', 'label' => 'Tong nap', 'type' => 'money'],
+                ['name' => 'tongNapThang', 'label' => 'Tong nap thang', 'type' => 'money'],
+                ['name' => 'tongNapTuan', 'label' => 'Tong nap tuan', 'type' => 'money'],
+                ['name' => 'quanew', 'label' => 'Qua new', 'type' => 'money'],
             ],
             'flash' => $this->pullFlash(),
         ]);
@@ -194,7 +197,7 @@ final class AdminController
             'message' => "B\u{1EA1}n c\u{00F3} ch\u{1EAF}c ch\u{1EAF}n mu\u{1ED1}n x\u{00F3}a user n\u{00E0}y?",
             'row' => $row,
             'summary' => ['ID' => 'id', 'Hiển thị' => 'name', 'User' => 'username', 'Email' => 'email'],
-            'summary' => ['ID' => 'id', 'Hien thi' => 'name', 'User' => 'username', 'Email' => 'email'],
+            'summary' => ['ID' => 'id', 'Username' => 'username', 'Name' => 'name', 'Email' => 'email'],
             'actionUrl' => '/admin/users/delete',
             'backUrl' => '/admin/users',
             'flash' => $this->pullFlash(),
@@ -209,7 +212,7 @@ final class AdminController
         $email = trim((string) ($_POST['email'] ?? ''));
         $password = (string) ($_POST['password'] ?? '');
 
-        if ($username === '' || !preg_match('/^[A-Za-z0-9_]{3,50}$/', $username)) {
+        if ($username === '' || !preg_match('/^[A-Za-z0-9_]{3,30}$/', $username)) {
             $this->redirectWithFlash($id ? '/admin/users/' . $id . '/edit' : '/admin/users/create', "T\u{00EA}n \u{0111}\u{0103}ng nh\u{1EAD}p kh\u{00F4}ng h\u{1EE3}p l\u{1EC7}.", 'error');
         }
 
@@ -225,17 +228,20 @@ final class AdminController
             'name' => trim((string) ($_POST['name'] ?? $username)) ?: $username,
             'username' => $username,
             'email' => $email !== '' ? $email : null,
-            'ban' => isset($_POST['ban']) ? 1 : 0,
-            'is_active' => isset($_POST['is_active']) ? 1 : 0,
-            'type_admin' => $this->userRoleFromRequest($id),
-            'money' => max(0, (int) ($_POST['money'] ?? 0)),
-            'totalmoney' => max(0, (int) ($_POST['totalmoney'] ?? 0)),
-            'tongnapthang' => max(0, (int) ($_POST['tongnapthang'] ?? 0)),
+            'status' => $this->userStatusFromRequest(),
+            'activated' => isset($_POST['activated']) ? 1 : 0,
+            'active' => isset($_POST['active']) ? 1 : 0,
+            'role' => $this->userRoleFromRequest($id),
+            'balance' => $this->moneyIntFromRequest('balance'),
+            'tongnap' => $this->moneyIntFromRequest('tongnap'),
+            'tongNapThang' => $this->moneyIntFromRequest('tongNapThang'),
+            'tongNapTuan' => $this->moneyIntFromRequest('tongNapTuan'),
+            'quanew' => $this->moneyIntFromRequest('quanew'),
         ];
 
         try {
             if ($id > 0) {
-                $sql = 'update users set name = :name, username = :username, email = :email, ban = :ban, is_active = :is_active, type_admin = :type_admin, money = :money, totalmoney = :totalmoney, tongnapthang = :tongnapthang';
+                $sql = 'update users set name = :name, username = :username, email = :email, status = :status, activated = :activated, active = :active, role = :role, balance = :balance, tongnap = :tongnap, tongNapThang = :tongNapThang, tongNapTuan = :tongNapTuan, quanew = :quanew';
 
                 if ($password !== '') {
                     if (strlen($password) < 6) {
@@ -252,8 +258,8 @@ final class AdminController
             } else {
                 $data['password'] = password_hash($password, PASSWORD_BCRYPT);
                 Database::connection()->prepare(
-                    'insert into users (name, username, email, password, ban, is_active, type_admin, money, totalmoney, tongnapthang, tongnapthang_reset_at, created_at, updated_at)
-                     values (:name, :username, :email, :password, :ban, :is_active, :type_admin, :money, :totalmoney, :tongnapthang, now(), now(), now())'
+                    'insert into users (name, username, email, password, status, activated, active, role, balance, tongnap, tongNapThang, tongNapTuan, quanew, created_at, updated_at)
+                     values (:name, :username, :email, :password, :status, :activated, :active, :role, :balance, :tongnap, :tongNapThang, :tongNapTuan, :quanew, now(), now())'
                 )->execute($data);
             }
         } catch (Throwable) {
@@ -475,11 +481,14 @@ final class AdminController
             ),
             'columns' => [
                 ['key' => 'id', 'label' => 'ID'],
+                ['key' => 'user_id', 'label' => 'User ID'],
                 ['key' => 'username', 'label' => 'User'],
-                ['key' => 'transaction_id', 'label' => 'TXN'],
+                ['key' => 'currency_id', 'label' => 'Currency'],
+                ['key' => 'type', 'label' => 'Type'],
                 ['key' => 'amount', 'label' => 'Amount', 'format' => 'money'],
-                ['key' => 'coin_amount', 'label' => 'Coin', 'format' => 'money'],
-                ['key' => 'status', 'label' => 'Status'],
+                ['key' => 'balance', 'label' => 'Balance', 'format' => 'money'],
+                ['key' => 'created_at', 'label' => 'Created', 'format' => 'datetime'],
+                ['key' => 'updated_at', 'label' => 'Updated', 'format' => 'datetime'],
             ],
             'actions' => ['edit' => '/admin/payments/%s/edit'],
             'flash' => $this->pullFlash(),
@@ -511,19 +520,29 @@ final class AdminController
         }
 
         View::render('admin/form', [
-            'title' => "Admin - S\u{1EED}a payment",
+            'title' => 'Admin - Chi tiet payment',
             'admin' => $admin,
             'section' => 'payments',
-            'heading' => "S\u{1EED}a payment",
-            'description' => "Admin ch\u{1EC9} s\u{1EED}a payment c\u{00F3} s\u{1EB5}n.",
+            'heading' => 'Chi tiet payment',
+            'description' => 'Chi xem thong tin payment, khong cho phep chinh sua.',
             'backUrl' => '/admin/payments',
-            'actionUrl' => '/admin/payments/save',
+            'actionUrl' => '',
+            'viewOnly' => true,
             'row' => $row,
             'fields' => [
-                ['name' => 'amount', 'label' => 'Amount', 'type' => 'number', 'min' => 0, 'step' => 1000],
-                ['name' => 'coin_amount', 'label' => 'Coin', 'type' => 'number', 'min' => 0],
-                ['name' => 'status', 'label' => 'Status'],
-                ['name' => 'description', 'label' => 'Description', 'type' => 'textarea', 'rows' => 5],
+                ['name' => 'id', 'label' => 'ID', 'readonly' => true],
+                ['name' => 'user_id', 'label' => 'User ID', 'readonly' => true],
+                ['name' => 'currency_id', 'label' => 'Currency', 'readonly' => true],
+                ['name' => 'type', 'label' => 'Type', 'readonly' => true],
+                ['name' => 'amount', 'label' => 'Amount', 'type' => 'money', 'readonly' => true],
+                ['name' => 'balance', 'label' => 'Balance', 'type' => 'money', 'readonly' => true],
+                ['name' => 'trans_id', 'label' => 'Trans ID', 'readonly' => true],
+                ['name' => 'player_name', 'label' => 'Player', 'readonly' => true],
+                ['name' => 'received', 'label' => 'Received', 'readonly' => true],
+                ['name' => 'description', 'label' => 'Description', 'type' => 'textarea', 'rows' => 4, 'readonly' => true],
+                ['name' => 'extra', 'label' => 'Extra', 'type' => 'textarea', 'rows' => 8, 'readonly' => true],
+                ['name' => 'created_at', 'label' => 'Created at', 'readonly' => true],
+                ['name' => 'updated_at', 'label' => 'Updated at', 'readonly' => true],
             ],
             'flash' => $this->pullFlash(),
         ]);
@@ -532,40 +551,7 @@ final class AdminController
     public function savePayment(): never
     {
         $this->requireAdmin();
-        $id = (int) ($_POST['id'] ?? 0);
-
-        if ($id <= 0) {
-            $this->redirectWithFlash('/admin/payments', "Payment ch\u{1EC9} \u{0111}\u{01B0}\u{1EE3}c s\u{1EED}a b\u{1EA3}n ghi \u{0111}\u{00E3} c\u{00F3}.", 'error');
-        }
-
-        $data = [
-            'id' => $id,
-            'amount' => max(0, (float) ($_POST['amount'] ?? 0)),
-            'coin_amount' => max(0, (int) ($_POST['coin_amount'] ?? 0)),
-            'status' => trim((string) ($_POST['status'] ?? 'success')) ?: 'success',
-            'description' => trim((string) ($_POST['description'] ?? '')),
-        ];
-
-        $connection = Database::connection();
-        $connection->beginTransaction();
-
-        try {
-            $connection->prepare(
-                'update payments set amount = :amount, coin_amount = :coin_amount, status = :status, description = :description, updated_at = now() where id = :id'
-            )->execute($data);
-            $connection->prepare(
-                'update deposits set amount = :amount, coin_amount = :coin_amount, status = :status, description = :description, updated_at = now() where payment_id = :id'
-            )->execute($data);
-            $connection->commit();
-        } catch (Throwable) {
-            if ($connection->inTransaction()) {
-                $connection->rollBack();
-            }
-
-            $this->redirectWithFlash('/admin/payments/' . $id . '/edit', "Kh\u{00F4}ng th\u{1EC3} c\u{1EAD}p nh\u{1EAD}t payment.", 'error');
-        }
-
-        $this->redirectWithFlash('/admin/payments', "\u{0110}\u{00E3} c\u{1EAD}p nh\u{1EAD}t payment.");
+        $this->redirectWithFlash('/admin/payments', 'Trang payment chi cho xem, khong ho tro luu.', 'error');
     }
 
     public function banks(): never
@@ -958,17 +944,14 @@ final class AdminController
         }
 
         try {
-            $statement = Database::connection()->prepare(
-                'select id, username, type_admin, ban, is_active from users where lower(username) = lower(:username) limit 1'
-            );
+            $statement = Database::connection()->prepare($this->currentAdminQuery());
             $statement->execute(['username' => $user['username']]);
             $admin = $statement->fetch();
 
             if (
                 $admin
-                && $this->isAdminRole((int) $admin['type_admin'])
-                && !$this->databaseBool($admin['ban'])
-                && $this->databaseBool($admin['is_active'])
+                && $this->isAdminRole($admin)
+                && $this->isUserAccessible($admin)
             ) {
                 return $admin;
             }
@@ -981,12 +964,14 @@ final class AdminController
 
     private function isCollaborator(array $admin): bool
     {
-        return (int) ($admin['type_admin'] ?? 0) === self::ROLE_COLLABORATOR;
+        return $this->accountRole($admin) === self::ROLE_COLLABORATOR;
     }
 
-    private function isAdminRole(int $typeAdmin): bool
+    private function isAdminRole(array $account): bool
     {
-        return in_array($typeAdmin, [self::ROLE_ADMIN, self::ROLE_COLLABORATOR], true);
+        $role = $this->accountRole($account);
+
+        return in_array($role, [self::ROLE_ADMIN, self::ROLE_COLLABORATOR], true);
     }
 
     private function currentAdminPath(): string
@@ -1004,39 +989,59 @@ final class AdminController
             || $path === '/admin/logout';
     }
 
-    private function userRoleOptions(?array $row = null): array
+    private function userRoleOptions(): array
     {
-        $options = [
-            ['value' => '0', 'label' => 'User'],
-            ['value' => (string) self::ROLE_COLLABORATOR, 'label' => "C\u{1ED9}ng t\u{00E1}c vi\u{00EA}n"],
+        return [
+            ['value' => (string) self::ROLE_USER, 'label' => 'User'],
+            ['value' => (string) self::ROLE_COLLABORATOR, 'label' => 'CTV'],
+            ['value' => (string) self::ROLE_ADMIN, 'label' => 'Admin'],
         ];
-
-        $currentType = (int) ($row['type_admin'] ?? 0);
-
-        if ($currentType > 0 && $currentType !== self::ROLE_COLLABORATOR) {
-            $options[] = ['value' => (string) $currentType, 'label' => "Admin hi\u{1EC7}n t\u{1EA1}i"];
-        }
-
-        return $options;
     }
 
     private function userRoleFromRequest(int $id): int
     {
-        $requestedType = (int) ($_POST['type_admin'] ?? 0);
+        $requestedRole = (int) ($_POST['role'] ?? self::ROLE_USER);
 
-        if (in_array($requestedType, [0, self::ROLE_COLLABORATOR], true)) {
-            return $requestedType;
+        if (in_array($requestedRole, [self::ROLE_USER, self::ROLE_COLLABORATOR, self::ROLE_ADMIN], true)) {
+            return $requestedRole;
         }
 
         if ($id > 0) {
             $row = $this->findRow('users', $id);
 
             if ($row) {
-                return (int) ($row['type_admin'] ?? 0);
+                return (int) ($row['role'] ?? self::ROLE_USER);
             }
         }
 
-        return 0;
+        return self::ROLE_USER;
+    }
+
+    private function userStatusOptions(): array
+    {
+        return [
+            ['value' => '0', 'label' => 'Deactivate'],
+            ['value' => '1', 'label' => 'Active'],
+            ['value' => '2', 'label' => 'Block'],
+        ];
+    }
+
+    private function userStatusFromRequest(): int
+    {
+        $status = (int) ($_POST['status'] ?? 1);
+
+        return in_array($status, [0, 1, 2], true) ? $status : 1;
+    }
+
+    private function isUserAccessible(array $account): bool
+    {
+        if ($this->usesModernUserSchema()) {
+            return (int) ($account['status'] ?? 1) !== 2
+                && $this->databaseBool($account['active'] ?? 1);
+        }
+
+        return !$this->databaseBool($account['ban'] ?? 0)
+            && $this->databaseBool($account['is_active'] ?? 1);
     }
 
     private function dashboardStats(): array
@@ -1125,6 +1130,14 @@ final class AdminController
         return in_array(strtolower((string) $value), ['1', 'true', 't', 'yes', 'y'], true);
     }
 
+    private function moneyIntFromRequest(string $key): int
+    {
+        $raw = (string) ($_POST[$key] ?? '0');
+        $normalized = preg_replace('/[^0-9]/', '', $raw) ?? '0';
+
+        return max(0, (int) $normalized);
+    }
+
     private function paymentEnabled(): bool
     {
         return $this->databaseBool(env('PAYMENT_ENABLED', 'true'));
@@ -1161,5 +1174,73 @@ final class AdminController
         $value = preg_replace('/[^a-z0-9]+/i', '-', $value) ?: '';
 
         return trim($value, '-');
+    }
+
+    private function userTableSchema(): array
+    {
+        if ($this->userTableSchema !== null) {
+            return $this->userTableSchema;
+        }
+
+        try {
+            $rows = Database::connection()->query('show columns from users')->fetchAll(PDO::FETCH_ASSOC) ?: [];
+            $schema = [];
+
+            foreach ($rows as $row) {
+                $field = strtolower((string) ($row['Field'] ?? ''));
+
+                if ($field !== '') {
+                    $schema[$field] = $row;
+                }
+            }
+
+            $this->userTableSchema = $schema;
+        } catch (Throwable) {
+            $this->userTableSchema = [];
+        }
+
+        return $this->userTableSchema;
+    }
+
+    private function usesModernUserSchema(): bool
+    {
+        $schema = $this->userTableSchema();
+
+        return isset($schema['role'], $schema['status'], $schema['active']);
+    }
+
+    private function adminLoginQuery(): string
+    {
+        if ($this->usesModernUserSchema()) {
+            return 'select id, username, password, status, activated, active, role from users where lower(username) = lower(:username) limit 1';
+        }
+
+        return 'select id, username, password, ban, is_active, type_admin from users where lower(username) = lower(:username) limit 1';
+    }
+
+    private function currentAdminQuery(): string
+    {
+        if ($this->usesModernUserSchema()) {
+            return 'select id, username, role, status, activated, active from users where lower(username) = lower(:username) limit 1';
+        }
+
+        return 'select id, username, type_admin, ban, is_active from users where lower(username) = lower(:username) limit 1';
+    }
+
+    private function accountRole(array $account): int
+    {
+        if ($this->usesModernUserSchema()) {
+            return (int) ($account['role'] ?? self::ROLE_USER);
+        }
+
+        $legacyRole = (int) ($account['type_admin'] ?? self::ROLE_USER);
+
+        if ($legacyRole <= 0) {
+            return self::ROLE_USER;
+        }
+
+        return $legacyRole === self::ROLE_COLLABORATOR
+            ? self::ROLE_COLLABORATOR
+            : self::ROLE_ADMIN;
     }
 }

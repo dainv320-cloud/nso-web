@@ -1,6 +1,7 @@
 <?php
 $row = $row ?? [];
 $fields = $fields ?? [];
+$viewOnly = !empty($viewOnly);
 $hasCkeditor = false;
 $checked = static fn (mixed $value): string => in_array(strtolower((string) $value), ['1', 'true', 't', 'yes'], true) ? 'checked' : '';
 $dateValue = static function (mixed $value): string {
@@ -17,10 +18,10 @@ ob_start();
 <form class="panel form admin-form-screen" method="post" action="<?= e($actionUrl ?? '') ?>">
     <div class="admin-list-head">
         <div>
-            <h2><?= e($heading ?? 'Sửa') ?></h2>
+            <h2><?= e($heading ?? 'Sua') ?></h2>
             <?php if (!empty($description)): ?><p><?= e($description) ?></p><?php endif; ?>
         </div>
-        <a class="btn secondary" href="<?= e($backUrl ?? '/admin') ?>">Quay lại</a>
+        <a class="btn secondary" href="<?= e($backUrl ?? '/admin') ?>">Quay lai</a>
     </div>
 
     <input type="hidden" name="id" value="<?= e((string) ($row['id'] ?? '')) ?>">
@@ -30,25 +31,27 @@ ob_start();
         $name = $field['name'];
         $type = $field['type'] ?? 'text';
         $value = $row[$name] ?? ($field['default'] ?? '');
+        $isReadonly = !empty($field['readonly']) || $viewOnly;
         ?>
 
         <?php if ($type === 'checkbox'): ?>
             <label class="admin-inline">
-                <input type="checkbox" name="<?= e($name) ?>" <?= $checked($value) ?: (!empty($field['checked']) ? 'checked' : '') ?>>
+                <input type="checkbox" name="<?= e($name) ?>" <?= $checked($value) ?: (!empty($field['checked']) ? 'checked' : '') ?> <?= $isReadonly ? 'disabled' : '' ?>>
                 <?= e($field['label']) ?>
             </label>
         <?php elseif ($type === 'textarea'): ?>
-            <?php $hasCkeditor = $hasCkeditor || (($field['editor'] ?? '') === 'ckeditor'); ?>
+            <?php $hasCkeditor = $hasCkeditor || (!$isReadonly && (($field['editor'] ?? '') === 'ckeditor')); ?>
             <label><?= e($field['label']) ?>
                 <textarea
                     name="<?= e($name) ?>"
                     rows="<?= e((string) ($field['rows'] ?? 4)) ?>"
-                    <?= (($field['editor'] ?? '') === 'ckeditor') ? 'data-ckeditor="classic"' : '' ?>
+                    <?= (!$isReadonly && (($field['editor'] ?? '') === 'ckeditor')) ? 'data-ckeditor="classic"' : '' ?>
+                    <?= $isReadonly ? 'readonly' : '' ?>
                 ><?= e((string) $value) ?></textarea>
             </label>
         <?php elseif ($type === 'select'): ?>
             <label><?= e($field['label']) ?>
-                <select name="<?= e($name) ?>">
+                <select name="<?= e($name) ?>" <?= $isReadonly ? 'disabled' : '' ?>>
                     <?php foreach (($field['options'] ?? []) as $option): ?>
                         <?php
                         $optionValue = is_array($option) ? (string) ($option['value'] ?? '') : (string) $option;
@@ -60,7 +63,19 @@ ob_start();
             </label>
         <?php elseif ($type === 'datetime-local'): ?>
             <label><?= e($field['label']) ?>
-                <input name="<?= e($name) ?>" type="datetime-local" value="<?= e($dateValue($value)) ?>" <?= !empty($field['required']) ? 'required' : '' ?>>
+                <input name="<?= e($name) ?>" type="datetime-local" value="<?= e($dateValue($value)) ?>" <?= !empty($field['required']) ? 'required' : '' ?> <?= $isReadonly ? 'readonly' : '' ?>>
+            </label>
+        <?php elseif ($type === 'money'): ?>
+            <label><?= e($field['label']) ?>
+                <input
+                    name="<?= e($name) ?>"
+                    type="text"
+                    value="<?= e(number_format((float) $value, 0, ',', '.')) ?>"
+                    inputmode="numeric"
+                    <?= !$isReadonly ? 'data-money-input' : '' ?>
+                    <?= !empty($field['required']) ? 'required' : '' ?>
+                    <?= $isReadonly ? 'readonly' : '' ?>
+                >
             </label>
         <?php else: ?>
             <label><?= e($field['label']) ?>
@@ -71,16 +86,19 @@ ob_start();
                     <?= !empty($field['required']) ? 'required' : '' ?>
                     <?= isset($field['min']) ? 'min="' . e((string) $field['min']) . '"' : '' ?>
                     <?= isset($field['step']) ? 'step="' . e((string) $field['step']) . '"' : '' ?>
+                    <?= $isReadonly ? 'readonly' : '' ?>
                 >
             </label>
         <?php endif; ?>
     <?php endforeach; ?>
 
     <?php if (!empty($row['image_url'])): ?>
-        <img class="admin-preview" src="<?= e($row['image_url']) ?>" alt="Ảnh xem trước">
+        <img class="admin-preview" src="<?= e($row['image_url']) ?>" alt="Preview">
     <?php endif; ?>
 
-    <button class="btn primary" type="submit">Lưu</button>
+    <?php if (!$viewOnly): ?>
+        <button class="btn primary" type="submit">Luu</button>
+    <?php endif; ?>
 </form>
 <?php
 $adminContent = ob_get_clean();
@@ -102,13 +120,13 @@ require __DIR__ . '/partials/shell.php';
                     this.xhr.open('POST', '/admin/uploads/image', true);
                     this.xhr.responseType = 'json';
 
-                    this.xhr.addEventListener('error', () => reject('Không thể upload ảnh.'));
-                    this.xhr.addEventListener('abort', () => reject('Upload ảnh đã bị hủy.'));
+                    this.xhr.addEventListener('error', () => reject('Khong the upload anh.'));
+                    this.xhr.addEventListener('abort', () => reject('Upload anh da bi huy.'));
                     this.xhr.addEventListener('load', () => {
                         const response = this.xhr.response;
 
                         if (!response || response.error) {
-                            reject(response?.error?.message || 'Upload ảnh thất bại.');
+                            reject(response?.error?.message || 'Upload anh that bai.');
                             return;
                         }
 

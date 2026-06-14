@@ -142,11 +142,19 @@ $statusLabel = static fn (string $status): string => match ($status) {
                 <div class="account-stats-grid">
                     <article>
                         <span>Số tiền</span>
-                        <strong><?= e($formatMoney($account['money'] ?? 0)) ?></strong>
+                        <strong><?= e($formatMoney($account['balance'] ?? 0)) ?></strong>
                     </article>
                     <article>
                         <span>Tổng nạp</span>
-                        <strong><?= e($formatMoney($account['totalmoney'] ?? 0)) ?></strong>
+                        <strong><?= e($formatMoney($account['tongnap'] ?? 0)) ?></strong>
+                    </article>
+                    <article>
+                        <span>T盻貧g n蘯｡p thﾃ｡ng</span>
+                        <strong><?= e($formatMoney($account['tongNapThang'] ?? 0)) ?></strong>
+                    </article>
+                    <article>
+                        <span>T盻貧g n蘯｡p tu盻ｧn</span>
+                        <strong><?= e($formatMoney($account['tongNapTuan'] ?? 0)) ?></strong>
                     </article>
                     <article>
                         <span><img src="<?= e($profileIcons['email']) ?>" alt=""></span>

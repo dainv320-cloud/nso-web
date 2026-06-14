@@ -19,6 +19,8 @@ return Application::configure(basePath: dirname(__DIR__))
             'login',
             'register',
             'forgot-password',
+            'forgot-password/verify-otp',
+            'forgot-password/reset',
             'api/*',
             'webhook/callback',
             'admin/*',
