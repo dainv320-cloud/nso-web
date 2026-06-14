@@ -677,7 +677,7 @@ final class SiteController
             if ($this->usesModernUserSchema()) {
                 $statement = $connection->prepare(
                     'insert into users (name, username, email, password, status, activated, active, role, tongnap, tongNapThang, tongNapTuan, quanew, created_at, updated_at)
-                     values (:name, :username, :email, :password, 0, 0, 0, 0, 0, 0, 0, 0, now(), now())'
+                     values (:name, :username, :email, :password, 1, 1, 1, 0, 0, 0, 0, 0, now(), now())'
                 );
                 $statement->execute([
                     'name' => null,
@@ -688,7 +688,7 @@ final class SiteController
             } else {
                 $statement = $connection->prepare(
                     'insert into users (name, username, email, password, ban, is_active, type_admin, money, totalmoney, tongnapthang, created_at, updated_at)
-                     values (:name, :username, :email, :password, 0, 0, 0, 0, 0, 0, now(), now())'
+                     values (:name, :username, :email, :password, 0, 1, 0, 0, 0, 0, now(), now())'
                 );
                 $statement->execute([
                     'name' => null,
