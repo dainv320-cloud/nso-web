@@ -1362,6 +1362,13 @@ final class SiteController
         return $default;
     }
 
+    private function userHasColumn(string $column): bool
+    {
+        $schema = $this->userTableSchema();
+
+        return isset($schema[strtolower($column)]);
+    }
+
     private function accountWithPasswordQuery(): string
     {
         if ($this->usesModernUserSchema()) {
@@ -1421,12 +1428,21 @@ final class SiteController
             return;
         }
 
+        $updates = [
+            'status = 1',
+            'activated = 1',
+            'active = 1',
+        ];
+
+        if ($this->userHasColumn('kh')) {
+            $updates[] = 'kh = 1';
+        }
+
+        $updates[] = 'updated_at = now()';
+
         $connection->prepare(
             'update users
-             set status = 1,
-                 activated = 1,
-                 active = 1,
-                 updated_at = now()
+             set ' . implode(",\n                 ", $updates) . '
              where id = :id'
         )->execute(['id' => $userId]);
     }
