@@ -1374,7 +1374,7 @@ final class SiteController
     private function accountProfileQuery(): string
     {
         if ($this->usesModernUserSchema()) {
-            return 'select id, name, username, email, status, activated, active, role, balance, tongnap, tongNapThang, tongNapTuan, quanew, balance as money, tongnap as totalmoney, case when status = 2 or active = 0 then 1 else 0 end as ban, created_at, updated_at from users where username = :username limit 1';
+            return 'select id, name, username, email, status, activated, active, role, balance, tongnap, tongNapThang, tongNapTuan, quanew, balance as money, tongnap as totalmoney, case when status <> 1 or activated = 0 or active = 0 then 1 else 0 end as ban, created_at, updated_at from users where username = :username limit 1';
         }
 
         return 'select id, name, username, email, 1 as status, 1 as activated, is_active as active, type_admin as role, totalmoney as tongnap, tongnapthang as tongNapThang, 0 as tongNapTuan, money as quanew, money, totalmoney, ban, created_at, updated_at from users where username = :username limit 1';
@@ -1383,7 +1383,7 @@ final class SiteController
     private function isAccountAccessible(array $account): bool
     {
         if ($this->usesModernUserSchema()) {
-            return (int) ($account['status'] ?? 1) !== 2
+            return (int) ($account['status'] ?? 0) === 1
                 && $this->databaseBool($account['activated'] ?? true)
                 && $this->databaseBool($account['active'] ?? true);
         }

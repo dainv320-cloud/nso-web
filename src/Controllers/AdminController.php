@@ -1036,7 +1036,7 @@ final class AdminController
     private function isUserAccessible(array $account): bool
     {
         if ($this->usesModernUserSchema()) {
-            return (int) ($account['status'] ?? 1) !== 2
+            return (int) ($account['status'] ?? 0) === 1
                 && $this->databaseBool($account['activated'] ?? 1)
                 && $this->databaseBool($account['active'] ?? 1);
         }
