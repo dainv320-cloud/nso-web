@@ -1037,6 +1037,7 @@ final class AdminController
     {
         if ($this->usesModernUserSchema()) {
             return (int) ($account['status'] ?? 1) !== 2
+                && $this->databaseBool($account['activated'] ?? 1)
                 && $this->databaseBool($account['active'] ?? 1);
         }
 

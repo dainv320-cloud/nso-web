@@ -1384,6 +1384,7 @@ final class SiteController
     {
         if ($this->usesModernUserSchema()) {
             return (int) ($account['status'] ?? 1) !== 2
+                && $this->databaseBool($account['activated'] ?? true)
                 && $this->databaseBool($account['active'] ?? true);
         }
 
