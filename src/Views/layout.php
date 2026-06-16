@@ -37,8 +37,8 @@ $bodyClasses = array_filter([
     <meta property="og:title" content="<?= e($title) ?>">
     <meta property="og:description" content="<?= e($description) ?>">
     <meta property="og:type" content="website">
-    <meta property="og:image" content="/img/logo.png">
-    <link rel="icon" type="image/png" href="/img/logo.png">
+    <meta property="og:image" content="/img/nso.webp">
+    <link rel="icon" type="image/webp" href="/img/nso.webp">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
@@ -47,7 +47,7 @@ $bodyClasses = array_filter([
 <body class="<?= e(implode(' ', $bodyClasses)) ?>">
     <header class="site-header">
         <a class="brand" href="/" aria-label="Ninja School Blue trang chủ">
-            <img class="brand-logo" src="/img/logo.png" alt="Ninja School Blue logo">
+            <img class="brand-logo" src="/img/nso.webp" alt="Ninja School Blue logo">
             <span>
                 <strong>Ninja School Blue</strong>
                 <small>Huyền Thoại Nhẫn Giả</small>

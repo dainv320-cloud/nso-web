@@ -13,6 +13,71 @@
     </div>
 </section>
 
+<?php
+$launchPopupDeadline = date('c', strtotime('+14 days'));
+$launchPopupZaloUrl = env('SOCIAL_ZALO_URL', 'https://zalo.me/');
+$launchPopupDownloadUrl = '/download';
+$launchPopupOpenLabel = date('H:i d/m/Y', strtotime($launchPopupDeadline));
+?>
+<div
+    class="launch-popup-backdrop"
+    data-launch-popup-backdrop
+    data-launch-popup-deadline="<?= e($launchPopupDeadline) ?>"
+    aria-hidden="true"
+>
+    <section class="launch-popup" role="dialog" aria-modal="true" aria-labelledby="launch-popup-title">
+        <button class="launch-popup-close" type="button" data-launch-popup-close aria-label="Đóng">&times;</button>
+        <div class="launch-popup-media">
+            <img src="/img/media/Char.png" alt="Sự kiện Ninja School Blue">
+        </div>
+        <div class="launch-popup-body">
+            <div class="launch-popup-meta">
+                <span class="launch-pill launch-pill-live">Đang diễn ra</span>
+                <span class="launch-pill">Quan trọng</span>
+                <span class="launch-pill launch-pill-date">Mở: <?= e($launchPopupOpenLabel) ?></span>
+            </div>
+            <h4 id="launch-popup-title">⚡CHƠI THỬ NINJA SCHOOL BLUE: BÁO DANH HÔM NAY - NHẬN NGAY QUÀ LỚN⚡</h4>
+            <p>
+                Hỡi các nhẫn giả, cơ hội ngàn năm có một đây rồi! Cổng Test Game Ninja School Blue đã chính thức mở
+                cửa. Đăng nhập và trải nghiệm ngay để nhận gói Hành trang Tân thủ siêu hiếm và vô vàn vật phẩm VIP.
+                Số lượng quà có hạn, vào game ngay!
+            </p>
+
+            <section class="launch-popup-timer">
+                <strong>Kết thúc sau</strong>
+                <div class="launch-popup-inline-time" data-launch-popup-inline>Đang cập nhật...</div>
+                <div class="launch-popup-countdown">
+                    <article>
+                        <span data-launch-days>00</span>
+                        <small>ngày</small>
+                    </article>
+                    <article>
+                        <span data-launch-hours>00</span>
+                        <small>giờ</small>
+                    </article>
+                    <article>
+                        <span data-launch-minutes>00</span>
+                        <small>phút</small>
+                    </article>
+                    <article>
+                        <span data-launch-seconds>00</span>
+                        <small>giây</small>
+                    </article>
+                </div>
+            </section>
+
+            <div class="launch-popup-actions">
+                <a class="launch-popup-cta launch-popup-cta-secondary" href="<?= e($launchPopupDownloadUrl) ?>">
+                    Tải game
+                </a>
+                <a class="launch-popup-cta" href="<?= e($launchPopupZaloUrl) ?>" target="_blank" rel="noopener noreferrer">
+                    Tham gia cộng đồng Zalo
+                </a>
+            </div>
+        </div>
+    </section>
+</div>
+
 <section class="quick-actions">
     <a href="/download">
         <strong>Tải game</strong>
