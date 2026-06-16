@@ -36,10 +36,10 @@ $launchPopupOpenLabel = date('H:i d/m/Y', strtotime($launchPopupDeadline));
                 <span class="launch-pill">Quan trọng</span>
                 <span class="launch-pill launch-pill-date">Mở: <?= e($launchPopupOpenLabel) ?></span>
             </div>
-            <h4 id="launch-popup-title">⚡CHƠI THỬ NINJA SCHOOL BLUE: BÁO DANH HÔM NAY - NHẬN NGAY QUÀ LỚN⚡</h4>
+            <h3 id="launch-popup-title">CHƠI THỬ NINJA SCHOOL BLUE: BÁO DANH HÔM NAY - NHẬN NGAY QUÀ LỚN!</h3>
             <p>
-                Hỡi các nhẫn giả, cơ hội ngàn năm có một đây rồi! Cổng Test Game Ninja School Blue đã chính thức mở
-                cửa. Đăng nhập và trải nghiệm ngay để nhận gói Hành trang Tân thủ siêu hiếm và vô vàn vật phẩm VIP.
+                Hỡi các nhẫn giả, cơ hội ngàn năm có một đây rồi! Cổng Test Game Ninja School Blue đã chính thức mở cửa.
+                Đăng nhập và trải nghiệm ngay để nhận gói Hành trang Tân thủ siêu hiếm và vô vàn vật phẩm VIP.
                 Số lượng quà có hạn, vào game ngay!
             </p>
 
