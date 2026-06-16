@@ -4,7 +4,7 @@ node_modules/
 .idea/
 .vscode/
 *.log
-/public
+/public/file
 /vendor
 /node_modules
 /storage/*.key
