@@ -163,11 +163,11 @@
                     <span class="download-version-icon download-version-icon-apple">
                         <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M16.46 13.03c-.02-2.13 1.74-3.15 1.82-3.2-1-1.46-2.55-1.66-3.09-1.68-1.3-.14-2.56.77-3.22.77-.67 0-1.69-.75-2.79-.73-1.43.02-2.76.84-3.49 2.13-1.5 2.6-.39 6.42 1.06 8.52.72 1.03 1.56 2.18 2.66 2.14 1.08-.04 1.48-.69 2.78-.69 1.29 0 1.65.69 2.79.67 1.16-.02 1.89-1.03 2.58-2.07.83-1.18 1.16-2.35 1.18-2.41-.03-.01-2.26-.87-2.29-3.45Z"/></svg>
                     </span>
-                    <h2>iOS Coming soon</h2>
+                    <h2>iOS v1.0.0</h2>
                     <dl>
                         <div>
                             <dt>Phiên bản:</dt>
-                            <dd>Coming soon</dd>
+                            <dd>v1.0.0</dd>
                         </div>
                         <div>
                             <dt>Dung lượng:</dt>
@@ -175,7 +175,7 @@
                         </div>
                         <div>
                             <dt>Yêu cầu:</dt>
-                            <dd>Sẽ được cập nhật sau.</dd>
+                            <dd>12.0</dd>
                         </div>
                     </dl>
                     <a class="btn primary download-version-button" href="https://testflight.apple.com/join/s3Nk9yQg">Tải xuống</a>
