@@ -103,6 +103,10 @@ final class AdminController
     {
         $admin = $this->requireAdmin();
         $registerBonusEnabled = $this->registerBonusEnabled();
+        $search = trim((string) ($_GET['q'] ?? ''));
+        $rows = $search !== ''
+            ? $this->searchUsers($search)
+            : $this->fetchAll('select id, username, name, email, status, activated, active, role, balance, tongnap, tongNapThang, tongNapTuan, quanew from users order by id desc limit 200');
 
         View::render('admin/list', [
             'title' => 'Admin - Users',
@@ -111,13 +115,16 @@ final class AdminController
             'heading' => 'Danh sach user',
             'description' => 'Quan ly cac truong hien tai cua bang users. Thuong dang ky hien tai: ' . number_format(self::REGISTER_BONUS_AMOUNT, 0, ',', '.') . ' coin.',
             'createUrl' => '/admin/users/create',
+            'searchUrl' => '/admin/users',
+            'searchValue' => $search,
+            'searchPlaceholder' => 'Tim theo username, ten hoac email',
             'featureToggles' => [[
                 'url' => '/admin/users/register-bonus-toggle',
                 'enabled' => $registerBonusEnabled,
                 'enableLabel' => 'Bat thuong dang ky',
                 'disableLabel' => 'Tat thuong dang ky',
             ]],
-            'rows' => $this->fetchAll('select id, username, name, email, status, activated, active, role, balance, tongnap, tongNapThang, tongNapTuan, quanew from users order by id desc limit 200'),
+            'rows' => $rows,
             'columns' => [
                 ['key' => 'id', 'label' => 'ID'],
                 ['key' => 'name', 'label' => 'Hiển thị'],
@@ -1086,6 +1093,28 @@ final class AdminController
     {
         try {
             return Database::connection()->query($sql)->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        } catch (Throwable) {
+            return [];
+        }
+    }
+
+    private function searchUsers(string $search): array
+    {
+        try {
+            $statement = Database::connection()->prepare(
+                'select id, username, name, email, status, activated, active, role, balance, tongnap, tongNapThang, tongNapTuan, quanew
+                 from users
+                 where lower(username) like :search
+                    or lower(coalesce(name, \'\')) like :search
+                    or lower(coalesce(email, \'\')) like :search
+                 order by id desc
+                 limit 200'
+            );
+            $statement->execute([
+                'search' => '%' . strtolower($search) . '%',
+            ]);
+
+            return $statement->fetchAll(PDO::FETCH_ASSOC) ?: [];
         } catch (Throwable) {
             return [];
         }

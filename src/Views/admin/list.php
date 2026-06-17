@@ -6,6 +6,9 @@ $hasActions = !empty($actions['edit']) || !empty($actions['delete']);
 $paymentToggleUrl = $paymentToggleUrl ?? null;
 $paymentEnabled = (bool) ($paymentEnabled ?? false);
 $featureToggles = $featureToggles ?? [];
+$searchUrl = $searchUrl ?? null;
+$searchValue = (string) ($searchValue ?? '');
+$searchPlaceholder = (string) ($searchPlaceholder ?? 'Tim kiem');
 ob_start();
 ?>
 <section class="panel">
@@ -13,6 +16,15 @@ ob_start();
         <div>
             <h2><?= e($heading ?? 'Danh sach') ?></h2>
             <?php if (!empty($description)): ?><p><?= e($description) ?></p><?php endif; ?>
+            <?php if (!empty($searchUrl)): ?>
+                <form class="admin-search" method="get" action="<?= e($searchUrl) ?>">
+                    <input type="text" name="q" value="<?= e($searchValue) ?>" placeholder="<?= e($searchPlaceholder) ?>">
+                    <button class="btn secondary" type="submit">Tim</button>
+                    <?php if ($searchValue !== ''): ?>
+                        <a class="btn secondary" href="<?= e($searchUrl) ?>">Bo loc</a>
+                    <?php endif; ?>
+                </form>
+            <?php endif; ?>
         </div>
         <div class="admin-actions">
             <?php foreach ($featureToggles as $toggle): ?>

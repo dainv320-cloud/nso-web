@@ -1,3 +1,29 @@
+<?php
+$homeCategoryLabels = [
+    'tin-tuc' => 'Tin tức',
+    'su-kien' => 'Sự kiện',
+    'tinh-nang' => 'Tính năng',
+    'huong-dan' => 'Hướng dẫn',
+    'thong-bao' => 'Thông báo',
+];
+
+$homeViewCount = static function (array $post): int {
+    $seed = abs(crc32((string) ($post['slug'] ?? $post['title'] ?? 'home-news')));
+
+    return 50 + ($seed % 300);
+};
+
+$homeFormatDate = static function (?string $date): string {
+    if (!$date) {
+        return date('d/m/Y');
+    }
+
+    $timestamp = strtotime($date);
+
+    return $timestamp ? date('d/m/Y', $timestamp) : $date;
+};
+?>
+
 <section class="hero">
     <div class="hero-copy">
         <p class="eyebrow">Huyền thoại nhẫn giả</p>
@@ -28,7 +54,7 @@ $launchPopupOpenLabel = date('H:i d/m/Y', strtotime($launchPopupDeadline));
     <section class="launch-popup" role="dialog" aria-modal="true" aria-labelledby="launch-popup-title">
         <button class="launch-popup-close" type="button" data-launch-popup-close aria-label="Đóng">&times;</button>
         <div class="launch-popup-media">
-            <img src="/img/media/Char.png" alt="Sự kiện Ninja School Blue">
+            <img src="/img/media/banner-test.jpg" alt="Sự kiện Ninja School Blue">
         </div>
         <div class="launch-popup-body">
             <div class="launch-popup-meta">
@@ -99,12 +125,23 @@ $launchPopupOpenLabel = date('H:i d/m/Y', strtotime($launchPopupDeadline));
 
     <div class="home-news-cards">
         <?php foreach ($posts as $post): ?>
-            <a class="card" href="/<?= e($post['slug']) ?>">
-                <img src="<?= e($post['image_url'] ?: '/img/ninja-hero.webp') ?>" alt="<?= e($post['title']) ?>">
-                <span class="pill"><?= e($post['category']) ?></span>
-                <h3><?= e($post['title']) ?></h3>
-                <p><?= e($post['summary']) ?></p>
-            </a>
+            <article class="home-news-card">
+                <a class="home-news-image" href="/<?= e($post['slug']) ?>">
+                    <img src="<?= e($post['image_url'] ?: '/img/ninja-hero.webp') ?>" alt="<?= e($post['title']) ?>">
+                    <span class="pill"><?= e($homeCategoryLabels[$post['category'] ?? ''] ?? ($post['category'] ?? 'Tin tức')) ?></span>
+                </a>
+                <div class="home-news-content">
+                    <h3><?= e($post['title']) ?></h3>
+                    <p class="home-news-subtitle"><?= e($homeCategoryLabels[$post['category'] ?? ''] ?? ($post['category'] ?? 'Tin tức')) ?></p>
+                    <div class="home-news-footer">
+                        <div class="home-news-meta">
+                            <span><?= e($homeFormatDate($post['published_at'] ?? null)) ?></span>
+                            <span><?= e((string) $homeViewCount($post)) ?></span>
+                        </div>
+                        <a class="home-news-readmore" href="/<?= e($post['slug']) ?>">Đọc <span>&rarr;</span></a>
+                    </div>
+                </div>
+            </article>
         <?php endforeach; ?>
     </div>
 </section>

@@ -178,7 +178,7 @@
                             <dd>Sẽ được cập nhật sau.</dd>
                         </div>
                     </dl>
-                    <a class="btn primary download-version-button" href="#">Tải xuống</a>
+                    <a class="btn primary download-version-button" href="https://testflight.apple.com/join/s3Nk9yQg">Tải xuống</a>
                 </article>
             </div>
         </details>
