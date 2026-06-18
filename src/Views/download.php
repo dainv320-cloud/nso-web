@@ -25,15 +25,15 @@
                     <span class="download-version-icon download-version-icon-download">
                         <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 3a1 1 0 0 1 1 1v8.59l2.3-2.3a1 1 0 1 1 1.4 1.42l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 1 1 1.4-1.42l2.3 2.3V4a1 1 0 0 1 1-1ZM5 18a1 1 0 0 1 1 1h12a1 1 0 1 1 0 2H6a1 1 0 0 1-1-1Z"/></svg>
                     </span>
-                    <h2>JAVA 1.1.0</h2>
+                    <h2>JAVA</h2>
                     <dl>
                         <div>
                             <dt>Phiên bản:</dt>
-                            <dd>1.1.0</dd>
+                            <dd>S1_217.jar</dd>
                         </div>
                         <div>
                             <dt>Dung lượng:</dt>
-                            <dd>20</dd>
+                            <dd>1 MB</dd>
                         </div>
                         <div>
                             <dt>Yêu cầu:</dt>
@@ -46,7 +46,7 @@
                     <span class="download-version-icon download-version-icon-download">
                         <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 3a1 1 0 0 1 1 1v8.59l2.3-2.3a1 1 0 1 1 1.4 1.42l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 1 1 1.4-1.42l2.3 2.3V4a1 1 0 0 1 1-1ZM5 18a1 1 0 0 1 1 1h12a1 1 0 1 1 0 2H6a1 1 0 0 1-1-1Z"/></svg>
                     </span>
-                    <h2>AngelChipEmulatorEXE</h2>
+                    <h2>Giả Lập Java (AngelChip) Cho PC</h2>
                     <dl>
                         <div>
                             <dt>Phiên bản:</dt>
