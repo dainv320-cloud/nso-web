@@ -1,13 +1,18 @@
 <?php
 $account = $account ?? null;
 $transactions = $transactions ?? [];
-$activeTab = in_array($activeTab ?? 'info', ['info', 'history', 'settings'], true) ? $activeTab : 'info';
+$feedbackHistory = $feedbackHistory ?? [];
+$feedbackValues = $feedbackValues ?? [];
+$activeTab = in_array($activeTab ?? 'info', ['info', 'history', 'settings', 'feedback'], true) ? $activeTab : 'info';
 $showEmailModal = ($_GET['modal'] ?? '') === 'email' || !empty($emailError);
 $showPasswordModal = ($_GET['modal'] ?? '') === 'password' || !empty($passwordError);
 $profileIcons = [
     'user' => 'https://cdn-icons-png.flaticon.com/512/1077/1077114.png',
     'history' => 'https://cdn-icons-png.flaticon.com/512/3503/3503786.png',
     'settings' => 'https://cdn-icons-png.flaticon.com/512/3524/3524659.png',
+    'feedback' => '/img/icons/feedback.svg',
+    'feedback_bug' => '/img/icons/feedback-bug.svg',
+    'feedback_feature' => '/img/icons/feedback-feature.svg',
     'email' => 'https://cdn-icons-png.flaticon.com/512/542/542689.png',
     'lock' => 'https://cdn-icons-png.flaticon.com/512/3064/3064155.png',
     'key' => 'https://cdn-icons-png.flaticon.com/512/2889/2889676.png',
@@ -30,6 +35,12 @@ $statusLabel = static fn (string $status): string => match ($status) {
     'failed' => 'Thất bại',
     default => 'Đang xử lý',
 };
+$feedbackTypeLabel = static fn (string $type): string => $type === 'bug' ? 'Báo lỗi' : 'Đề xuất tính năng';
+$feedbackStatusLabel = static fn (string $status): string => match ($status) {
+    'done' => 'Đã xử lý',
+    'reviewing' => 'Đang xem',
+    default => 'Mới gửi',
+};
 ?>
 
 <?php if (!empty($user) && $account): ?>
@@ -51,6 +62,9 @@ $statusLabel = static fn (string $status): string => match ($status) {
                 </a>
                 <a class="<?= $activeTab === 'settings' ? 'active' : '' ?>" href="/profile?tab=settings">
                     <span><img src="<?= e($profileIcons['settings']) ?>" alt=""></span> Cài đặt
+                </a>
+                <a class="<?= $activeTab === 'feedback' ? 'active' : '' ?>" href="/profile?tab=feedback">
+                    <span><img src="<?= e($profileIcons['feedback']) ?>" alt=""></span> Phản hồi
                 </a>
             </nav>
         </aside>
@@ -132,6 +146,58 @@ $statusLabel = static fn (string $status): string => match ($status) {
                         <strong>Đổi mật khẩu</strong>
                         <em>&rsaquo;</em>
                     </button>
+                </div>
+            <?php elseif ($activeTab === 'feedback'): ?>
+                <header class="account-panel-head">
+                    <h2>Gửi phản hồi</h2>
+                    <p>Báo lỗi hoặc đề xuất tính năng mới cho hệ thống.</p>
+                </header>
+
+                <?php if (!empty($feedbackSuccess)): ?>
+                    <div class="alert success"><?= e($feedbackSuccess) ?></div>
+                <?php endif; ?>
+                <?php if (!empty($feedbackError)): ?>
+                    <div class="alert error"><?= e($feedbackError) ?></div>
+                <?php endif; ?>
+
+                <form class="panel form feedback-form" method="post" action="/profile/feedback">
+                    <label>Loại phản hồi
+                        <select name="type" required>
+                            <option value="bug" <?= ($feedbackValues['type'] ?? '') === 'bug' ? 'selected' : '' ?>>Báo lỗi</option>
+                            <option value="feature" <?= ($feedbackValues['type'] ?? '') === 'feature' ? 'selected' : '' ?>>Đề xuất tính năng</option>
+                        </select>
+                    </label>
+                    <label>Tiêu đề
+                        <input name="subject" type="text" maxlength="180" value="<?= e((string) ($feedbackValues['subject'] ?? '')) ?>" placeholder="Tóm tắt ngắn gọn vấn đề" required>
+                    </label>
+                    <label>Nội dung
+                        <textarea name="content" rows="5" placeholder="Mô tả chi tiết lỗi hoặc đề xuất của bạn" required><?= e((string) ($feedbackValues['content'] ?? '')) ?></textarea>
+                    </label>
+                    <button class="btn primary" type="submit">Gửi phản hồi</button>
+                </form>
+
+                <div class="feedback-history">
+                    <h3>Phản hồi đã gửi</h3>
+                    <?php if ($feedbackHistory !== []): ?>
+                        <?php foreach ($feedbackHistory as $item): ?>
+                            <article class="feedback-card">
+                                <div class="feedback-card-head">
+                                    <strong>
+                                        <img class="feedback-inline-icon" src="<?= e((string) (($item['type'] ?? '') === 'bug' ? $profileIcons['feedback_bug'] : $profileIcons['feedback_feature'])) ?>" alt="">
+                                        <?= e((string) ($item['subject'] ?? '')) ?>
+                                    </strong>
+                                    <span><?= e($feedbackTypeLabel((string) ($item['type'] ?? 'feature'))) ?> | <?= e($feedbackStatusLabel((string) ($item['status'] ?? 'new'))) ?></span>
+                                </div>
+                                <p><?= e((string) ($item['content'] ?? '')) ?></p>
+                                <small><?= e($formatDate($item['created_at'] ?? null)) ?></small>
+                            </article>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <div class="account-empty feedback-empty">
+                            <strong>Chưa có phản hồi nào</strong>
+                            <p>Khi bạn gửi phản hồi, lịch sử sẽ hiển thị tại đây.</p>
+                        </div>
+                    <?php endif; ?>
                 </div>
             <?php else: ?>
                 <header class="account-panel-head">

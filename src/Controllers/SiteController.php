@@ -285,12 +285,68 @@ final class SiteController
             'user' => $user,
             'account' => $user ? $this->accountProfile($user) : null,
             'transactions' => $user ? $this->depositHistory($user) : [],
+            'feedbackHistory' => $user ? $this->feedbackHistory($user) : [],
             'activeTab' => $_GET['tab'] ?? 'info',
             'emailSuccess' => $this->pullFlash('profile_email_success'),
             'emailError' => $this->pullFlash('profile_email_error'),
             'passwordSuccess' => $this->pullFlash('profile_password_success'),
             'passwordError' => $this->pullFlash('profile_password_error'),
+            'feedbackSuccess' => $this->pullFlash('profile_feedback_success'),
+            'feedbackError' => $this->pullFlash('profile_feedback_error'),
+            'feedbackValues' => $this->pullArrayFlash('profile_feedback_values'),
         ]);
+    }
+
+    public function submitProfileFeedback(): never
+    {
+        $user = $_SESSION['user'] ?? null;
+
+        if (!$user) {
+            header('Location: /login');
+            exit;
+        }
+
+        $type = trim((string) ($_POST['type'] ?? ''));
+        $subject = trim((string) ($_POST['subject'] ?? ''));
+        $content = trim((string) ($_POST['content'] ?? ''));
+        $allowedTypes = ['bug', 'feature'];
+
+        $_SESSION['profile_feedback_values'] = [
+            'type' => $type,
+            'subject' => $subject,
+            'content' => $content,
+        ];
+
+        if (!in_array($type, $allowedTypes, true) || $subject === '' || $content === '' || strlen($subject) > 180) {
+            $_SESSION['profile_feedback_error'] = "Vui lòng chọn đúng loại phản hồi và nhập đầy đủ tiêu đề, nội dung.";
+            header('Location: /profile?tab=feedback');
+            exit;
+        }
+
+        try {
+            $account = $this->accountProfile($user);
+
+            Database::connection()->prepare(
+                'insert into user_feedback (user_id, type, subject, content, status, created_at, updated_at)
+                 values (:user_id, :type, :subject, :content, :status, now(), now())'
+            )->execute([
+                'user_id' => (int) ($account['id'] ?? 0),
+                'type' => $type,
+                'subject' => $subject,
+                'content' => $content,
+                'status' => 'new',
+            ]);
+
+            unset($_SESSION['profile_feedback_values']);
+            $_SESSION['profile_feedback_success'] = "Đã gửi phản hồi thành công.";
+            $_SESSION['toast_success'] = "Cảm ơn bạn, phản hồi đã được gửi.";
+            header('Location: /profile?tab=feedback');
+            exit;
+        } catch (Throwable) {
+            $_SESSION['profile_feedback_error'] = "Không thể gửi phản hồi lúc này. Vui lòng thử lại sau.";
+            header('Location: /profile?tab=feedback');
+            exit;
+        }
     }
 
     public function submitProfileEmail(): never
@@ -849,6 +905,30 @@ final class SiteController
         }
     }
 
+    private function feedbackHistory(array $sessionUser): array
+    {
+        try {
+            $account = $this->accountProfile($sessionUser);
+
+            if (empty($account['id'])) {
+                return [];
+            }
+
+            $statement = Database::connection()->prepare(
+                'select id, type, subject, content, status, created_at
+                 from user_feedback
+                 where user_id = :user_id
+                 order by created_at desc, id desc
+                 limit 20'
+            );
+            $statement->execute(['user_id' => $account['id']]);
+
+            return $statement->fetchAll();
+        } catch (Throwable) {
+            return [];
+        }
+    }
+
     private function accountWithPassword(string $username): ?array
     {
         $statement = Database::connection()->prepare($this->accountWithPasswordQuery());
@@ -1272,6 +1352,14 @@ final class SiteController
         unset($_SESSION[$key]);
 
         return is_string($message) ? $message : null;
+    }
+
+    private function pullArrayFlash(string $key): array
+    {
+        $value = $_SESSION[$key] ?? null;
+        unset($_SESSION[$key]);
+
+        return is_array($value) ? $value : [];
     }
 
     private function forgotPasswordStep(): string

@@ -401,13 +401,25 @@ final class AdminController
             $this->redirectWithFlash($id ? '/admin/posts/' . $id . '/edit' : '/admin/posts/create', "Ti\u{00EA}u \u{0111}\u{1EC1} v\u{00E0} slug b\u{1EAF}t bu\u{1ED9}c.", 'error');
         }
 
+        $imageUrl = trim((string) ($_POST['image_url'] ?? '')) ?: null;
+
+        try {
+            $uploadedImageUrl = $this->storeNewsImageUpload($_FILES['image_file'] ?? null);
+
+            if ($uploadedImageUrl !== null) {
+                $imageUrl = $uploadedImageUrl;
+            }
+        } catch (Throwable $exception) {
+            $this->redirectWithFlash($id ? '/admin/posts/' . $id . '/edit' : '/admin/posts/create', $exception->getMessage(), 'error');
+        }
+
         $data = [
             'title' => $title,
             'slug' => $slug,
             'category' => trim((string) ($_POST['category'] ?? 'tin-tuc')) ?: 'tin-tuc',
             'summary' => trim((string) ($_POST['summary'] ?? '')),
             'content' => trim((string) ($_POST['content'] ?? '')),
-            'image_url' => trim((string) ($_POST['image_url'] ?? '')) ?: null,
+            'image_url' => $imageUrl,
             'status' => trim((string) ($_POST['status'] ?? 'published')) ?: 'published',
             'is_featured' => isset($_POST['is_featured']) ? 1 : 0,
             'published_at' => trim((string) ($_POST['published_at'] ?? '')) ?: date('Y-m-d H:i:s'),
@@ -447,46 +459,13 @@ final class AdminController
     public function uploadImage(): never
     {
         $this->requireAdmin();
-
-        $file = $_FILES['upload'] ?? null;
-
-        if (!is_array($file) || ($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
-            Response::json(['error' => ['message' => "Kh\u{00F4}ng nh\u{1EAD}n \u{0111}\u{01B0}\u{1EE3}c file upload."]], 422);
+        try {
+            $url = $this->storeNewsImageUpload($_FILES['upload'] ?? null, true);
+        } catch (Throwable $exception) {
+            Response::json(['error' => ['message' => $exception->getMessage()]], 422);
         }
 
-        if ((int) ($file['size'] ?? 0) > 5 * 1024 * 1024) {
-            Response::json(['error' => ['message' => "\u{1EA2}nh kh\u{00F4}ng \u{0111}\u{01B0}\u{1EE3}c v\u{01B0}\u{1EE3}t qu\u{00E1} 5MB."]], 422);
-        }
-
-        $tmpName = (string) ($file['tmp_name'] ?? '');
-        $mimeType = function_exists('mime_content_type') ? (string) mime_content_type($tmpName) : '';
-        $extensions = [
-            'image/jpeg' => 'jpg',
-            'image/png' => 'png',
-            'image/webp' => 'webp',
-            'image/gif' => 'gif',
-        ];
-
-        if (!isset($extensions[$mimeType])) {
-            Response::json(['error' => ['message' => "Ch\u{1EC9} h\u{1ED7} tr\u{1EE3} JPG, PNG, WEBP, GIF."]], 422);
-        }
-
-        $uploadDir = dirname(__DIR__, 2) . '/public/uploads/news';
-
-        if (!is_dir($uploadDir) && !mkdir($uploadDir, 0775, true) && !is_dir($uploadDir)) {
-            Response::json(['error' => ['message' => "Kh\u{00F4}ng t\u{1EA1}o \u{0111}\u{01B0}\u{1EE3}c th\u{01B0} m\u{1EE5}c upload."]], 500);
-        }
-
-        $filename = date('YmdHis') . '-' . bin2hex(random_bytes(6)) . '.' . $extensions[$mimeType];
-        $target = $uploadDir . '/' . $filename;
-
-        if (!move_uploaded_file($tmpName, $target)) {
-            Response::json(['error' => ['message' => "Kh\u{00F4}ng l\u{01B0}u \u{0111}\u{01B0}\u{1EE3}c file upload."]], 500);
-        }
-
-        Response::json([
-            'url' => '/uploads/news/' . $filename,
-        ]);
+        Response::json(['url' => $url]);
     }
 
     public function payments(): never
@@ -584,6 +563,77 @@ final class AdminController
     {
         $this->requireAdmin();
         $this->redirectWithFlash('/admin/payments', 'Trang payment chi cho xem, khong ho tro luu.', 'error');
+    }
+
+    public function feedbacks(): never
+    {
+        $admin = $this->requireAdmin();
+        $search = trim((string) ($_GET['q'] ?? ''));
+        $rows = $search !== ''
+            ? $this->searchFeedbacks($search)
+            : $this->fetchAll(
+                'select f.id, f.user_id, u.username, f.type, f.subject, f.status, f.created_at, f.updated_at
+                 from user_feedback f
+                 left join users u on u.id = f.user_id
+                 order by f.created_at desc, f.id desc
+                 limit 200'
+            );
+
+        View::render('admin/list', [
+            'title' => 'Admin - Phản hồi',
+            'admin' => $admin,
+            'section' => 'feedbacks',
+            'heading' => 'Danh sách phản hồi',
+            'description' => 'Tổng hợp báo lỗi và đề xuất tính năng từ người dùng.',
+            'searchUrl' => '/admin/feedbacks',
+            'searchValue' => $search,
+            'searchPlaceholder' => 'Tìm theo username, tiêu đề hoặc nội dung',
+            'rows' => $rows,
+            'columns' => [
+                ['key' => 'id', 'label' => 'ID'],
+                ['key' => 'username', 'label' => 'User'],
+                ['key' => 'type', 'label' => 'Loại', 'format' => 'feedback_type'],
+                ['key' => 'subject', 'label' => 'Tiêu đề'],
+                ['key' => 'status', 'label' => 'Trạng thái', 'format' => 'feedback_status'],
+                ['key' => 'created_at', 'label' => 'Ngày gửi', 'format' => 'datetime'],
+            ],
+            'actions' => ['edit' => '/admin/feedbacks/%s/edit'],
+            'flash' => $this->pullFlash(),
+        ]);
+    }
+
+    public function feedbackForm(int $id): never
+    {
+        $admin = $this->requireAdmin();
+        $row = $this->findFeedback($id);
+
+        if (!$row) {
+            $this->redirectWithFlash('/admin/feedbacks', "Kh\u{00F4}ng t\u{00EC}m th\u{1EA5}y feedback.", 'error');
+        }
+
+        View::render('admin/form', [
+            'title' => 'Admin - Chi tiết phản hồi',
+            'admin' => $admin,
+            'section' => 'feedbacks',
+            'heading' => 'Chi tiết phản hồi',
+            'description' => 'Xem thông tin phản hồi do người dùng gửi lên.',
+            'backUrl' => '/admin/feedbacks',
+            'actionUrl' => '',
+            'viewOnly' => true,
+            'row' => $row,
+            'fields' => [
+                ['name' => 'id', 'label' => 'ID', 'readonly' => true],
+                ['name' => 'user_id', 'label' => 'User ID', 'readonly' => true],
+                ['name' => 'username', 'label' => 'Username', 'readonly' => true],
+                ['name' => 'type', 'label' => 'Loại', 'readonly' => true],
+                ['name' => 'status', 'label' => 'Trạng thái', 'readonly' => true],
+                ['name' => 'subject', 'label' => 'Tiêu đề', 'readonly' => true],
+                ['name' => 'content', 'label' => 'Nội dung', 'type' => 'textarea', 'rows' => 8, 'readonly' => true],
+                ['name' => 'created_at', 'label' => 'Ngày tạo', 'readonly' => true],
+                ['name' => 'updated_at', 'label' => 'Cập nhật', 'readonly' => true],
+            ],
+            'flash' => $this->pullFlash(),
+        ]);
     }
 
     public function banks(): never
@@ -1120,15 +1170,104 @@ final class AdminController
         }
     }
 
+    private function storeNewsImageUpload(mixed $file, bool $required = false): ?string
+    {
+        if (!is_array($file) || ($file['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+            if ($required) {
+                throw new \RuntimeException("Kh\u{00F4}ng nh\u{1EAD}n \u{0111}\u{01B0}\u{1EE3}c file upload.");
+            }
+
+            return null;
+        }
+
+        if (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+            throw new \RuntimeException("Kh\u{00F4}ng nh\u{1EAD}n \u{0111}\u{01B0}\u{1EE3}c file upload.");
+        }
+
+        if ((int) ($file['size'] ?? 0) > 5 * 1024 * 1024) {
+            throw new \RuntimeException("\u{1EA2}nh kh\u{00F4}ng \u{0111}\u{01B0}\u{1EE3}c v\u{01B0}\u{1EE3}t qu\u{00E1} 5MB.");
+        }
+
+        $tmpName = (string) ($file['tmp_name'] ?? '');
+        $mimeType = function_exists('mime_content_type') ? (string) mime_content_type($tmpName) : '';
+        $extensions = [
+            'image/jpeg' => 'jpg',
+            'image/png' => 'png',
+            'image/webp' => 'webp',
+            'image/gif' => 'gif',
+        ];
+
+        if (!isset($extensions[$mimeType])) {
+            throw new \RuntimeException("Ch\u{1EC9} h\u{1ED7} tr\u{1EE3} JPG, PNG, WEBP, GIF.");
+        }
+
+        $uploadDir = dirname(__DIR__, 2) . '/public/uploads/news';
+
+        if (!is_dir($uploadDir) && !mkdir($uploadDir, 0775, true) && !is_dir($uploadDir)) {
+            throw new \RuntimeException("Kh\u{00F4}ng t\u{1EA1}o \u{0111}\u{01B0}\u{1EE3}c th\u{01B0} m\u{1EE5}c upload.");
+        }
+
+        $filename = date('YmdHis') . '-' . bin2hex(random_bytes(6)) . '.' . $extensions[$mimeType];
+        $target = $uploadDir . '/' . $filename;
+
+        if (!move_uploaded_file($tmpName, $target)) {
+            throw new \RuntimeException("Kh\u{00F4}ng l\u{01B0}u \u{0111}\u{01B0}\u{1EE3}c file upload.");
+        }
+
+        return '/uploads/news/' . $filename;
+    }
+
+    private function searchFeedbacks(string $search): array
+    {
+        try {
+            $statement = Database::connection()->prepare(
+                'select f.id, f.user_id, u.username, f.type, f.subject, f.status, f.created_at, f.updated_at
+                 from user_feedback f
+                 left join users u on u.id = f.user_id
+                 where lower(coalesce(u.username, \'\')) like :search
+                    or lower(coalesce(f.subject, \'\')) like :search
+                    or lower(coalesce(f.content, \'\')) like :search
+                 order by f.created_at desc, f.id desc
+                 limit 200'
+            );
+            $statement->execute([
+                'search' => '%' . strtolower($search) . '%',
+            ]);
+
+            return $statement->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        } catch (Throwable) {
+            return [];
+        }
+    }
+
     private function findRow(string $table, int $id): ?array
     {
-        $allowed = ['users', 'posts', 'payments', 'bank_accounts', 'downloads', 'promotion_campaigns'];
+        $allowed = ['users', 'posts', 'payments', 'bank_accounts', 'downloads', 'promotion_campaigns', 'user_feedback'];
 
         if ($id <= 0 || !in_array($table, $allowed, true)) {
             return null;
         }
 
         $statement = Database::connection()->prepare("select * from {$table} where id = :id limit 1");
+        $statement->execute(['id' => $id]);
+        $row = $statement->fetch();
+
+        return $row ?: null;
+    }
+
+    private function findFeedback(int $id): ?array
+    {
+        if ($id <= 0) {
+            return null;
+        }
+
+        $statement = Database::connection()->prepare(
+            'select f.*, u.username
+             from user_feedback f
+             left join users u on u.id = f.user_id
+             where f.id = :id
+             limit 1'
+        );
         $statement->execute(['id' => $id]);
         $row = $statement->fetch();
 

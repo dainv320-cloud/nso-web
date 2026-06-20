@@ -9,13 +9,23 @@ use Throwable;
 
 final class ContentRepository
 {
+    private const FALLBACK_NEWS_IMAGES = [
+        '/img/ninja-hero.webp',
+        '/img/ns2d-ninja.webp',
+        '/img/post-default.webp',
+        '/img/ns2d-bg1.png',
+        '/img/ninjaschool2d-bg1.png',
+        '/img/media/banner-test.jpg',
+        '/img/media/Char.png',
+    ];
+
     public function featuredPosts(): array
     {
-        return $this->fetch(
+        return $this->normalizePosts($this->fetch(
             'select * from posts where status = :status order by is_featured desc, published_at desc limit 6',
             ['status' => 'published'],
             $this->fallbackPosts()
-        );
+        ));
     }
 
     public function posts(?string $category = null): array
@@ -23,18 +33,18 @@ final class ContentRepository
         $fallback = $this->fallbackPosts();
 
         if ($category === null) {
-            return $this->fetch(
+            return $this->normalizePosts($this->fetch(
                 'select * from posts where status = :status order by published_at desc',
                 ['status' => 'published'],
                 $fallback
-            );
+            ));
         }
 
-        return $this->fetch(
+        return $this->normalizePosts($this->fetch(
             'select * from posts where status = :status and category = :category order by published_at desc',
             ['status' => 'published', 'category' => $category],
             array_values(array_filter($fallback, fn (array $post): bool => $post['category'] === $category))
-        );
+        ));
     }
 
     public function post(string $slug): ?array
@@ -46,12 +56,12 @@ final class ContentRepository
         );
 
         if ($posts !== []) {
-            return $posts[0];
+            return $this->normalizePost($posts[0]);
         }
 
         foreach ($this->fallbackPosts() as $post) {
             if ($post['slug'] === $slug) {
-                return $post;
+                return $this->normalizePost($post);
             }
         }
 
@@ -65,14 +75,14 @@ final class ContentRepository
             fn (array $post): bool => ($post['category'] ?? '') === $category && ($post['slug'] ?? '') !== $slug
         ));
 
-        return array_slice($this->fetch(
+        return array_slice($this->normalizePosts($this->fetch(
             'select * from posts
              where status = :status and category = :category and slug <> :slug
              order by published_at desc, id desc
              limit ' . max(1, $limit),
             ['status' => 'published', 'category' => $category, 'slug' => $slug],
             $fallback
-        ), 0, $limit);
+        )), 0, $limit);
     }
 
     public function downloads(): array
@@ -107,6 +117,30 @@ final class ContentRepository
         } catch (Throwable) {
             return $fallback;
         }
+    }
+
+    private function normalizePosts(array $posts): array
+    {
+        return array_map(fn (array $post): array => $this->normalizePost($post), $posts);
+    }
+
+    private function normalizePost(array $post): array
+    {
+        $imageUrl = trim((string) ($post['image_url'] ?? ''));
+
+        if ($imageUrl === '') {
+            $post['image_url'] = $this->fallbackImageForPost($post);
+        }
+
+        return $post;
+    }
+
+    private function fallbackImageForPost(array $post): string
+    {
+        $seedSource = (string) ($post['slug'] ?? $post['title'] ?? $post['category'] ?? 'ninja-school');
+        $seed = abs(crc32($seedSource));
+
+        return self::FALLBACK_NEWS_IMAGES[$seed % count(self::FALLBACK_NEWS_IMAGES)];
     }
 
     private function fallbackPosts(): array

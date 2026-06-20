@@ -1947,6 +1947,68 @@ body.auth-open {
     font-style: normal;
 }
 
+.feedback-form {
+    display: grid;
+    gap: 16px;
+    margin-top: 18px;
+}
+
+.feedback-history {
+    display: grid;
+    gap: 14px;
+    margin-top: 22px;
+}
+
+.feedback-history h3 {
+    margin: 0;
+    color: var(--primary-dark);
+    font-size: 1rem;
+}
+
+.feedback-card {
+    padding: 18px 20px;
+    border: 1px solid #fed7aa;
+    border-radius: 18px;
+    background: linear-gradient(180deg, #fff 0%, #fff7ed 100%);
+}
+
+.feedback-card-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 8px;
+}
+
+.feedback-card-head strong {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--primary-dark);
+}
+
+.feedback-inline-icon {
+    width: 18px;
+    height: 18px;
+    object-fit: contain;
+    color: var(--primary);
+}
+
+.feedback-card-head span,
+.feedback-card small {
+    color: var(--muted);
+    font-size: .92rem;
+}
+
+.feedback-card p {
+    margin: 0 0 10px;
+    white-space: pre-line;
+}
+
+.feedback-empty {
+    margin-top: 10px;
+}
+
 .profile-modal-backdrop {
     position: fixed;
     inset: 0;
@@ -2318,10 +2380,20 @@ body.auth-open {
     box-shadow: 0 14px 28px rgb(15 23 42 / 24%);
 }
 
+.social-tab-feedback {
+    background: linear-gradient(135deg, #f97316, #ea580c) !important;
+    padding: 10px;
+}
+
 .social-tab img {
     width: 28px;
     height: 28px;
     object-fit: contain;
+}
+
+.social-tab-feedback img {
+    width: 24px;
+    height: 24px;
 }
 
 table {
@@ -2749,6 +2821,13 @@ th {
 
 .admin-search .btn {
     min-height: 42px;
+}
+
+.admin-field-hint {
+    display: block;
+    margin-top: 6px;
+    color: #64748b;
+    font-size: .88rem;
 }
 
 .admin-form-screen {

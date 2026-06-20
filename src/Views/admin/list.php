@@ -87,6 +87,14 @@ ob_start();
                                     99 => 'Admin',
                                     default => 'Admin',
                                 } ?>
+                            <?php elseif (($column['format'] ?? '') === 'feedback_type'): ?>
+                                <?= (string) $value === 'bug' ? 'Báo lỗi' : 'Đề xuất tính năng' ?>
+                            <?php elseif (($column['format'] ?? '') === 'feedback_status'): ?>
+                                <?= match ((string) $value) {
+                                    'done' => 'Đã xử lý',
+                                    'reviewing' => 'Đang xem',
+                                    default => 'Mới',
+                                } ?>
                             <?php else: ?>
                                 <?= e((string) $value) ?>
                             <?php endif; ?>

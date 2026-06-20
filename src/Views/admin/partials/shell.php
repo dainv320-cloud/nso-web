@@ -11,6 +11,7 @@ $adminMenu = $isCollaborator
         'users' => ['/admin/users', 'Tài khoản'],
         'posts' => ['/admin/posts', 'Tin tức'],
         'payments' => ['/admin/payments', 'Payment'],
+        'feedbacks' => ['/admin/feedbacks', 'Phản hồi'],
         'banks' => ['/admin/banks', 'Tài khoản ngân hàng'],
         'downloads' => ['/admin/downloads', 'Tải xuống'],
         'rates' => ['/admin/rates', 'Rate & KM'],

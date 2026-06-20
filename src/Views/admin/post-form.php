@@ -24,7 +24,7 @@ $statusOptions = [
 ];
 ob_start();
 ?>
-<form class="panel form admin-form-screen admin-post-form" method="post" action="<?= e($actionUrl ?? '/admin/posts/save') ?>">
+<form class="panel form admin-form-screen admin-post-form" method="post" action="<?= e($actionUrl ?? '/admin/posts/save') ?>" enctype="multipart/form-data">
     <div class="admin-list-head">
         <div>
             <h2><?= e($heading ?? 'Tin tức') ?></h2>
@@ -78,6 +78,12 @@ ob_start();
     <label>
         Ảnh đại diện
         <input name="image_url" value="<?= e((string) ($row['image_url'] ?? '')) ?>" placeholder="/uploads/news/example.webp">
+    </label>
+
+    <label>
+        Upload anh local
+        <input name="image_file" type="file" accept="image/jpeg,image/png,image/webp,image/gif">
+        <small class="admin-field-hint">Neu chon anh local, he thong se tu dong dung anh nay lam anh dai dien.</small>
     </label>
 
     <?php if (!empty($row['image_url'])): ?>

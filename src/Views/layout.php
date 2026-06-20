@@ -116,6 +116,11 @@ $bodyClasses = array_filter([
         <a href="<?= e($zaloUrl) ?>" target="_blank" rel="noopener noreferrer" aria-label="Zalo">
             <img src="https://www.google.com/s2/favicons?domain=zalo.me&sz=64" alt="">
         </a>
+        <?php if ($loggedUser): ?>
+            <a class="social-tab-feedback" href="/profile?tab=feedback" aria-label="Phản hồi">
+                <img src="/img/icons/feedback.svg" alt="">
+            </a>
+        <?php endif; ?>
     </aside>
 
     <footer class="site-footer">
