@@ -1203,7 +1203,8 @@ final class AdminController
 
         $baseDir = dirname(__DIR__, 2);
         $uploadDir = $baseDir . '/public/uploads/news';
-        $mirrorUploadDir = $baseDir . '/public_html/uploads/news';
+        $defaultMirrorUploadDir = dirname($baseDir) . '/public_html/uploads/news';
+        $mirrorUploadDir = rtrim((string) env('NEWS_MIRROR_UPLOAD_DIR', $defaultMirrorUploadDir), '/\\');
 
         if (!is_dir($uploadDir) && !mkdir($uploadDir, 0775, true) && !is_dir($uploadDir)) {
             throw new \RuntimeException("Kh\u{00F4}ng t\u{1EA1}o \u{0111}\u{01B0}\u{1EE3}c th\u{01B0} m\u{1EE5}c upload.");
