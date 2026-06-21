@@ -68,6 +68,11 @@ ob_start();
             Ngày đăng
             <input name="published_at" type="datetime-local" value="<?= e($dateValue($row['published_at'] ?? null)) ?>">
         </label>
+
+        <label>
+            Index
+            <input name="sort_order" type="number" min="0" step="1" value="<?= e((string) ($row['sort_order'] ?? 0)) ?>">
+        </label>
     </div>
 
     <label>

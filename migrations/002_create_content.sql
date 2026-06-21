@@ -8,11 +8,13 @@ create table if not exists posts (
     image_url varchar(500),
     status varchar(30) not null default 'published',
     is_featured boolean not null default false,
+    sort_order integer not null default 0,
     published_at timestamptz not null default now(),
     created_at timestamptz not null default now()
 );
 
 alter table posts add column if not exists updated_at timestamptz not null default now();
+alter table posts add column if not exists sort_order integer not null default 0;
 alter table posts alter column title type text;
 alter table posts alter column slug type varchar(255);
 alter table posts alter column category type varchar(100);

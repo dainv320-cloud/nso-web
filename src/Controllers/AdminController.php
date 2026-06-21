@@ -17,6 +17,7 @@ final class AdminController
     private const ROLE_USER = 0;
     private const REGISTER_BONUS_AMOUNT = 5000000;
     private ?array $userTableSchema = null;
+    private ?array $postsTableSchema = null;
 
     public function login(): never
     {
@@ -326,13 +327,16 @@ final class AdminController
             'section' => 'posts',
             'heading' => "Danh s\u{00E1}ch tin t\u{1EE9}c",
             'createUrl' => '/admin/posts/create',
-            'rows' => $this->fetchAll('select * from posts order by published_at desc, id desc limit 200'),
+            'rows' => $this->fetchAll('select * from posts order by ' . $this->postsOrderBy() . ' limit 200'),
             'columns' => [
                 ['key' => 'id', 'label' => 'ID'],
+                ['key' => 'sort_order', 'label' => 'Index'],
                 ['key' => 'title', 'label' => "Ti\u{00EA}u \u{0111}\u{1EC1}"],
                 ['key' => 'category', 'label' => "Danh m\u{1EE5}c"],
                 ['key' => 'status', 'label' => "Tr\u{1EA1}ng th\u{00E1}i"],
-                ['key' => 'published_at', 'label' => "Ng\u{00E0}y \u{0111}\u{0103}ng"],
+                ['key' => 'is_featured', 'label' => "N\u{1ED5}i b\u{1EAD}t", 'format' => 'bool'],
+                ['key' => 'created_at', 'label' => "Ng\u{00E0}y t\u{1EA1}o", 'format' => 'datetime'],
+                ['key' => 'published_at', 'label' => "Ng\u{00E0}y \u{0111}\u{0103}ng", 'format' => 'datetime'],
             ],
             'actions' => $this->isCollaborator($admin)
                 ? ['edit' => '/admin/posts/%s/edit']
@@ -358,7 +362,7 @@ final class AdminController
             'description' => "So\u{1EA1}n n\u{1ED9}i dung b\u{00E0}i vi\u{1EBF}t v\u{00E0} ch\u{00E8}n \u{1EA3}nh tr\u{1EF1}c ti\u{1EBF}p trong b\u{00E0}i vi\u{1EBF}t.",
             'backUrl' => '/admin/posts',
             'actionUrl' => '/admin/posts/save',
-            'row' => $row ?? ['status' => 'published', 'published_at' => date('Y-m-d H:i:s')],
+            'row' => $row ?? ['status' => 'published', 'published_at' => date('Y-m-d H:i:s'), 'sort_order' => 0],
             'flash' => $this->pullFlash(),
         ]);
     }
@@ -384,7 +388,7 @@ final class AdminController
             'heading' => "X\u{00F3}a tin t\u{1EE9}c",
             'message' => "B\u{1EA1}n c\u{00F3} ch\u{1EAF}c ch\u{1EAF}n mu\u{1ED1}n x\u{00F3}a tin t\u{1EE9}c n\u{00E0}y?",
             'row' => $row,
-            'summary' => ['ID' => 'id', "Ti\u{00EA}u \u{0111}\u{1EC1}" => 'title', 'Slug' => 'slug'],
+            'summary' => ['ID' => 'id', 'Index' => 'sort_order', "Ti\u{00EA}u \u{0111}\u{1EC1}" => 'title', 'Slug' => 'slug'],
             'actionUrl' => '/admin/posts/delete',
             'backUrl' => '/admin/posts',
             'flash' => $this->pullFlash(),
@@ -425,16 +429,45 @@ final class AdminController
             'published_at' => trim((string) ($_POST['published_at'] ?? '')) ?: date('Y-m-d H:i:s'),
         ];
 
+        if ($this->postHasColumn('sort_order')) {
+            $data['sort_order'] = max(0, (int) ($_POST['sort_order'] ?? 0));
+        }
+
         try {
             if ($id > 0) {
                 $data['id'] = $id;
+                $updates = [
+                    'title = :title',
+                    'slug = :slug',
+                    'category = :category',
+                    'summary = :summary',
+                    'content = :content',
+                    'image_url = :image_url',
+                    'status = :status',
+                    'is_featured = :is_featured',
+                    'published_at = :published_at',
+                    'updated_at = now()',
+                ];
+
+                if ($this->postHasColumn('sort_order')) {
+                    $updates[] = 'sort_order = :sort_order';
+                }
+
                 Database::connection()->prepare(
-                    'update posts set title = :title, slug = :slug, category = :category, summary = :summary, content = :content, image_url = :image_url, status = :status, is_featured = :is_featured, published_at = :published_at, updated_at = now() where id = :id'
+                    'update posts set ' . implode(', ', $updates) . ' where id = :id'
                 )->execute($data);
             } else {
+                $columns = ['title', 'slug', 'category', 'summary', 'content', 'image_url', 'status', 'is_featured', 'published_at'];
+                $values = [':title', ':slug', ':category', ':summary', ':content', ':image_url', ':status', ':is_featured', ':published_at'];
+
+                if ($this->postHasColumn('sort_order')) {
+                    $columns[] = 'sort_order';
+                    $values[] = ':sort_order';
+                }
+
                 Database::connection()->prepare(
-                    'insert into posts (title, slug, category, summary, content, image_url, status, is_featured, published_at)
-                     values (:title, :slug, :category, :summary, :content, :image_url, :status, :is_featured, :published_at)'
+                    'insert into posts (' . implode(', ', $columns) . ')
+                     values (' . implode(', ', $values) . ')'
                 )->execute($data);
             }
         } catch (Throwable) {
@@ -1454,5 +1487,61 @@ final class AdminController
         return $legacyRole === self::ROLE_COLLABORATOR
             ? self::ROLE_COLLABORATOR
             : self::ROLE_ADMIN;
+    }
+
+    private function postsOrderBy(): string
+    {
+        $parts = [];
+
+        if ($this->postHasColumn('is_featured')) {
+            $parts[] = 'is_featured desc';
+        }
+
+        if ($this->postHasColumn('sort_order')) {
+            $parts[] = 'sort_order asc';
+        }
+
+        if ($this->postHasColumn('created_at')) {
+            $parts[] = 'created_at desc';
+        } elseif ($this->postHasColumn('published_at')) {
+            $parts[] = 'published_at desc';
+        }
+
+        $parts[] = 'id desc';
+
+        return implode(', ', $parts);
+    }
+
+    private function postHasColumn(string $column): bool
+    {
+        $schema = $this->postsTableSchema();
+
+        return isset($schema[strtolower($column)]);
+    }
+
+    private function postsTableSchema(): array
+    {
+        if ($this->postsTableSchema !== null) {
+            return $this->postsTableSchema;
+        }
+
+        try {
+            $rows = Database::connection()->query('show columns from posts')->fetchAll(PDO::FETCH_ASSOC) ?: [];
+            $schema = [];
+
+            foreach ($rows as $row) {
+                $field = strtolower((string) ($row['Field'] ?? ''));
+
+                if ($field !== '') {
+                    $schema[$field] = $row;
+                }
+            }
+
+            $this->postsTableSchema = $schema;
+        } catch (Throwable) {
+            $this->postsTableSchema = [];
+        }
+
+        return $this->postsTableSchema;
     }
 }

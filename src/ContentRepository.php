@@ -18,11 +18,14 @@ final class ContentRepository
         '/img/media/banner-test.jpg',
         '/img/media/Char.png',
     ];
+    private ?array $postsTableSchema = null;
 
     public function featuredPosts(): array
     {
         return $this->normalizePosts($this->fetch(
-            'select * from posts where status = :status order by is_featured desc, published_at desc limit 6',
+            'select * from posts
+             where status = :status
+             order by ' . $this->postsOrderBy(),
             ['status' => 'published'],
             $this->fallbackPosts()
         ));
@@ -34,14 +37,18 @@ final class ContentRepository
 
         if ($category === null) {
             return $this->normalizePosts($this->fetch(
-                'select * from posts where status = :status order by published_at desc',
+                'select * from posts
+                 where status = :status
+                 order by ' . $this->postsOrderBy(),
                 ['status' => 'published'],
                 $fallback
             ));
         }
 
         return $this->normalizePosts($this->fetch(
-            'select * from posts where status = :status and category = :category order by published_at desc',
+            'select * from posts
+             where status = :status and category = :category
+             order by ' . $this->postsOrderBy(),
             ['status' => 'published', 'category' => $category],
             array_values(array_filter($fallback, fn (array $post): bool => $post['category'] === $category))
         ));
@@ -78,7 +85,7 @@ final class ContentRepository
         return array_slice($this->normalizePosts($this->fetch(
             'select * from posts
              where status = :status and category = :category and slug <> :slug
-             order by published_at desc, id desc
+             order by ' . $this->postsOrderBy() . '
              limit ' . max(1, $limit),
             ['status' => 'published', 'category' => $category, 'slug' => $slug],
             $fallback
@@ -154,7 +161,9 @@ final class ContentRepository
                 'content' => "Hang dong 9x la khu vuc phu hop chờ nhan vat cap cao muon luyen cap, san vat pham va phoi hop to doi.\nTruoc khi vao hang, hay chưan bi day mau, chakra, thuc an tang chi so va sửa lai trang bi de trảnh bi ngat giua duong.\nNen di theo nhom co sat thuong, không che va ho tro hoi phuc. Khi gap quai dong, uu tien dung ky nang dien rong va giu khoang cach an toan.\nTrong luc di hang dong 9x, hay tap trung clear quai theo tung cum, trảnh tach doi hinh qua xa va cảnh thoi gian hoi sinh cua quai de toi uu kinh nghiem.\nNeu muc tieu la san do, nen thong nhat cach chia vat pham truoc khi vao map va uu tien nhung tang co quai phu hop voi suc mảnh cua doi.",
                 'image_url' => '/img/post-default.webp',
                 'published_at' => date('Y-m-d H:i:s'),
+                'created_at' => date('Y-m-d H:i:s'),
                 'is_featured' => true,
+                'sort_order' => 0,
             ],
             [
                 'title' => 'Khai mo may chu Lang Gio',
@@ -164,7 +173,9 @@ final class ContentRepository
                 'content' => 'May chu Lang Gio mo cua voi nhiem vu tan thu, phan thuong đăng nhập va dua top luc chien trong tuan dau.',
                 'image_url' => '/img/post-default.webp',
                 'published_at' => date('Y-m-d H:i:s'),
+                'created_at' => date('Y-m-d H:i:s'),
                 'is_featured' => true,
+                'sort_order' => 0,
             ],
             [
                 'title' => 'Su kien san boss cuoi tuan',
@@ -174,7 +185,9 @@ final class ContentRepository
                 'content' => 'Nguoi chời tham gia san boss co co hoi nhan trang bi, da cuong hoa va dảnh hieu gioi han.',
                 'image_url' => '/img/ns2d-ninja.webp',
                 'published_at' => date('Y-m-d H:i:s'),
+                'created_at' => date('Y-m-d H:i:s'),
                 'is_featured' => true,
+                'sort_order' => 0,
             ],
             [
                 'title' => 'Hướng dẫn nạp an toàn',
@@ -184,9 +197,67 @@ final class ContentRepository
                 'content' => 'Không chia sẻ mật khẩu, ma OTP hoac thông tin tài khoản chờ nguoi tu xung la ho tro vien.',
                 'image_url' => '/img/post-default.webp',
                 'published_at' => date('Y-m-d H:i:s'),
+                'created_at' => date('Y-m-d H:i:s'),
                 'is_featured' => false,
+                'sort_order' => 0,
             ],
         ];
+    }
+
+    private function postsOrderBy(): string
+    {
+        $parts = [];
+
+        if ($this->postHasColumn('is_featured')) {
+            $parts[] = 'is_featured desc';
+        }
+
+        if ($this->postHasColumn('sort_order')) {
+            $parts[] = 'sort_order asc';
+        }
+
+        if ($this->postHasColumn('created_at')) {
+            $parts[] = 'created_at desc';
+        } elseif ($this->postHasColumn('published_at')) {
+            $parts[] = 'published_at desc';
+        }
+
+        $parts[] = 'id desc';
+
+        return implode(', ', $parts);
+    }
+
+    private function postHasColumn(string $column): bool
+    {
+        $schema = $this->postsTableSchema();
+
+        return isset($schema[strtolower($column)]);
+    }
+
+    private function postsTableSchema(): array
+    {
+        if ($this->postsTableSchema !== null) {
+            return $this->postsTableSchema;
+        }
+
+        try {
+            $rows = Database::connection()->query('show columns from posts')->fetchAll(PDO::FETCH_ASSOC) ?: [];
+            $schema = [];
+
+            foreach ($rows as $row) {
+                $field = strtolower((string) ($row['Field'] ?? ''));
+
+                if ($field !== '') {
+                    $schema[$field] = $row;
+                }
+            }
+
+            $this->postsTableSchema = $schema;
+        } catch (Throwable) {
+            $this->postsTableSchema = [];
+        }
+
+        return $this->postsTableSchema;
     }
 }
 

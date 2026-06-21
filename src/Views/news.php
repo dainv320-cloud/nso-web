@@ -59,7 +59,7 @@ $viewCount = static function (array $post): int {
             <section class="news-block">
                 <h2><span>!</span> Thông báo</h2>
                 <div class="announcement-list">
-                    <?php foreach (array_slice($announcements, 0, 3) as $post): ?>
+                    <?php foreach ($announcements as $post): ?>
                         <a class="announcement-item" href="/<?= e($post['slug']) ?>">
                             <div class="announcement-meta">
                                 <span class="news-badge"><?= e($categoryLabel($post['category'] ?? null)) ?></span>
