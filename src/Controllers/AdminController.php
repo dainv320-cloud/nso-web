@@ -1201,17 +1201,29 @@ final class AdminController
             throw new \RuntimeException("Ch\u{1EC9} h\u{1ED7} tr\u{1EE3} JPG, PNG, WEBP, GIF.");
         }
 
-        $uploadDir = dirname(__DIR__, 2) . '/public/uploads/news';
+        $baseDir = dirname(__DIR__, 2);
+        $uploadDir = $baseDir . '/public/uploads/news';
+        $mirrorUploadDir = $baseDir . '/public_html/upload/news';
 
         if (!is_dir($uploadDir) && !mkdir($uploadDir, 0775, true) && !is_dir($uploadDir)) {
             throw new \RuntimeException("Kh\u{00F4}ng t\u{1EA1}o \u{0111}\u{01B0}\u{1EE3}c th\u{01B0} m\u{1EE5}c upload.");
         }
 
+        if (!is_dir($mirrorUploadDir) && !mkdir($mirrorUploadDir, 0775, true) && !is_dir($mirrorUploadDir)) {
+            throw new \RuntimeException("Kh\u{00F4}ng t\u{1EA1}o \u{0111}\u{01B0}\u{1EE3}c th\u{01B0} m\u{1EE5}c public_html/upload/news.");
+        }
+
         $filename = date('YmdHis') . '-' . bin2hex(random_bytes(6)) . '.' . $extensions[$mimeType];
         $target = $uploadDir . '/' . $filename;
+        $mirrorTarget = $mirrorUploadDir . '/' . $filename;
 
         if (!move_uploaded_file($tmpName, $target)) {
             throw new \RuntimeException("Kh\u{00F4}ng l\u{01B0}u \u{0111}\u{01B0}\u{1EE3}c file upload.");
+        }
+
+        if (!copy($target, $mirrorTarget)) {
+            @unlink($target);
+            throw new \RuntimeException("Kh\u{00F4}ng copy \u{1EA3}nh sang public_html/upload/news.");
         }
 
         return '/uploads/news/' . $filename;
