@@ -105,6 +105,42 @@ final class ContentRepository
         );
     }
 
+    public function downloadPlatforms(): array
+    {
+        $downloads = $this->downloads();
+
+        return [
+            [
+                'key' => 'java',
+                'name' => 'JAVA',
+                'subtitle' => 'Danh sach day du cac ban JAR da tai len.',
+                'current_label' => 'JAVA',
+                'versions' => $this->javaDownloadVersions(),
+            ],
+            [
+                'key' => 'android',
+                'name' => 'Android',
+                'subtitle' => 'Phien ban APK danh cho dien thoai Android.',
+                'current_label' => 'Android',
+                'versions' => $this->androidDownloadVersions($downloads),
+            ],
+            [
+                'key' => 'windows',
+                'name' => 'Windows',
+                'subtitle' => 'Phien ban PC va gia lap san sang tai xuong.',
+                'current_label' => 'Windows',
+                'versions' => $this->windowsDownloadVersions(),
+            ],
+            [
+                'key' => 'ios',
+                'name' => 'iOS',
+                'subtitle' => 'Phien ban danh cho thiet bi Apple.',
+                'current_label' => 'iOS',
+                'versions' => $this->iosDownloadVersions(),
+            ],
+        ];
+    }
+
     public function stats(): array
     {
         return [
@@ -258,6 +294,230 @@ final class ContentRepository
         }
 
         return $this->postsTableSchema;
+    }
+
+    private function javaDownloadVersions(): array
+    {
+        $files = $this->downloadFilesByExtensions(['jar']);
+
+        usort($files, fn (array $a, array $b): int => $this->compareDownloadFiles($a['name'], $b['name']));
+
+        $versions = array_map(function (array $file): array {
+            return [
+                'title' => $this->jarTitle($file['name']),
+                'version' => $this->jarVersionLabel($file['name']),
+                'file_name' => $file['name'],
+                'file_size' => $this->formatFileSize((int) $file['size']),
+                'notes' => 'Hỗ trợ máy Java/J2ME.',
+                'download_url' => '/file/' . rawurlencode($file['name']),
+            ];
+        }, $files);
+
+        $emulator = $this->downloadFileByName('AngelChipEmulator.zip');
+
+        if ($emulator !== null) {
+            $versions[] = [
+                'title' => 'Giả lập Java (AngelChip) cho PC',
+                'version' => 'AngelChipEmulator',
+                'file_name' => $emulator['name'],
+                'file_size' => $this->formatFileSize((int) $emulator['size']),
+                'notes' => 'Windows 7 trở lên.',
+                'download_url' => '/file/' . rawurlencode($emulator['name']),
+            ];
+        }
+
+        return $versions;
+    }
+
+    private function androidDownloadVersions(array $downloads): array
+    {
+        $versions = [];
+
+        foreach ($downloads as $download) {
+            if (strtolower((string) ($download['platform'] ?? '')) !== 'android') {
+                continue;
+            }
+
+            $versions[] = [
+                'title' => 'Android ' . (string) ($download['version'] ?? ''),
+                'version' => (string) ($download['version'] ?? ''),
+                'file_name' => basename((string) ($download['download_url'] ?? '')) ?: 'Android',
+                'file_size' => (string) ($download['file_size'] ?? '-'),
+                'notes' => (string) ($download['notes'] ?? 'Android 8 trở lên.'),
+                'download_url' => (string) ($download['download_url'] ?? '#'),
+            ];
+        }
+
+        if ($versions !== []) {
+            return $versions;
+        }
+
+        return [[
+            'title' => 'Android 1.0.0',
+            'version' => '1.0.0',
+            'file_name' => 'Android',
+            'file_size' => '95 MB',
+            'notes' => 'Android 8 trở lên.',
+            'download_url' => '#',
+        ]];
+    }
+
+    private function windowsDownloadVersions(): array
+    {
+        $files = $this->downloadFilesByExtensions(['zip']);
+        $versions = [];
+
+        usort($files, fn (array $a, array $b): int => strnatcasecmp($a['name'], $b['name']));
+
+        foreach ($files as $file) {
+            $name = $file['name'];
+
+            if (strcasecmp($name, 'AngelChipEmulator.zip') === 0) {
+                continue;
+            }
+
+            $base = pathinfo($name, PATHINFO_FILENAME);
+
+            $versions[] = [
+                'title' => $this->humanizeDownloadName($base),
+                'version' => $base,
+                'file_name' => $name,
+                'file_size' => $this->formatFileSize((int) $file['size']),
+                'notes' => 'Bản PC tải về và chơi ngay.',
+                'download_url' => '/file/' . rawurlencode($name),
+            ];
+        }
+
+        return $versions;
+    }
+
+    private function iosDownloadVersions(): array
+    {
+        return [[
+            'title' => 'iOS v1.0.0',
+            'version' => 'v1.0.0',
+            'file_name' => 'TestFlight',
+            'file_size' => '-',
+            'notes' => 'iOS 12.0 trở lên.',
+            'download_url' => 'https://testflight.apple.com/join/s3Nk9yQg',
+        ]];
+    }
+
+    private function downloadFilesByExtensions(array $extensions): array
+    {
+        $directory = dirname(__DIR__) . '/public/file';
+
+        if (!is_dir($directory)) {
+            return [];
+        }
+
+        $normalizedExtensions = array_map('strtolower', $extensions);
+        $files = [];
+
+        foreach (scandir($directory) ?: [] as $entry) {
+            if ($entry === '.' || $entry === '..') {
+                continue;
+            }
+
+            $path = $directory . '/' . $entry;
+
+            if (!is_file($path)) {
+                continue;
+            }
+
+            $extension = strtolower((string) pathinfo($entry, PATHINFO_EXTENSION));
+
+            if (!in_array($extension, $normalizedExtensions, true)) {
+                continue;
+            }
+
+            $files[] = [
+                'name' => $entry,
+                'size' => filesize($path) ?: 0,
+            ];
+        }
+
+        return $files;
+    }
+
+    private function downloadFileByName(string $fileName): ?array
+    {
+        $directory = dirname(__DIR__) . '/public/file';
+        $path = $directory . '/' . $fileName;
+
+        if (!is_file($path)) {
+            return null;
+        }
+
+        return [
+            'name' => $fileName,
+            'size' => filesize($path) ?: 0,
+        ];
+    }
+
+    private function compareDownloadFiles(string $left, string $right): int
+    {
+        [$leftVersion, $leftMultiplier] = $this->downloadSortParts($left);
+        [$rightVersion, $rightMultiplier] = $this->downloadSortParts($right);
+
+        return [$rightVersion, $leftMultiplier, strtolower($left)] <=> [$leftVersion, $rightMultiplier, strtolower($right)];
+    }
+
+    private function downloadSortParts(string $fileName): array
+    {
+        preg_match('/(\d{2,4})/', $fileName, $versionMatch);
+        preg_match('/_X(\d+)/i', $fileName, $multiplierMatch);
+
+        return [
+            (int) ($versionMatch[1] ?? 0),
+            (int) ($multiplierMatch[1] ?? 0),
+        ];
+    }
+
+    private function jarTitle(string $fileName): string
+    {
+        return 'Ninja ' . $this->jarVersionLabel($fileName);
+    }
+
+    private function jarVersionLabel(string $fileName): string
+    {
+        $base = pathinfo($fileName, PATHINFO_FILENAME);
+        $normalized = preg_replace('/^ninja[_\-\s]*school[_\-\s]*blue[_\-\s]*/i', '', $base) ?? $base;
+        $normalized = preg_replace('/^ninja[_\-\s]*/i', '', $normalized) ?? $normalized;
+        $normalized = trim($normalized);
+
+        if ($normalized === '') {
+            $normalized = $base;
+        }
+
+        return $this->humanizeDownloadName($normalized);
+    }
+
+    private function humanizeDownloadName(string $value): string
+    {
+        $normalized = preg_replace('/[_-]+/', ' ', trim($value)) ?? $value;
+
+        return preg_replace_callback('/\b([a-z])/', fn (array $matches): string => strtoupper($matches[1]), strtolower($normalized)) ?? $normalized;
+    }
+
+    private function formatFileSize(int $bytes): string
+    {
+        if ($bytes <= 0) {
+            return '-';
+        }
+
+        $units = ['B', 'KB', 'MB', 'GB'];
+        $size = (float) $bytes;
+        $unitIndex = 0;
+
+        while ($size >= 1024 && $unitIndex < count($units) - 1) {
+            $size /= 1024;
+            $unitIndex++;
+        }
+
+        $precision = $size >= 100 || $unitIndex === 0 ? 0 : 1;
+
+        return number_format($size, $precision, '.', '') . ' ' . $units[$unitIndex];
     }
 }
 

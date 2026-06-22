@@ -65,6 +65,7 @@ final class SiteController
         View::render('download', [
             'title' => "T\u{1EA3}i game",
             'downloads' => $this->content->downloads(),
+            'downloadPlatforms' => $this->content->downloadPlatforms(),
         ]);
     }
 
