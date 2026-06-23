@@ -331,6 +331,19 @@ final class ContentRepository
 
     private function androidDownloadVersions(array $downloads): array
     {
+        $apkFile = $this->downloadFileByName('Ninjaschoolblue.apk');
+
+        if ($apkFile !== null) {
+            return [[
+                'title' => 'Ninjaschoolblue',
+                'version' => 'Ninjaschoolblue',
+                'file_name' => $apkFile['name'],
+                'file_size' => $this->formatFileSize((int) $apkFile['size']),
+                'notes' => 'Android 8 trở lên.',
+                'download_url' => '/file/Ninjaschoolblue.apk',
+            ]];
+        }
+
         $versions = [];
 
         foreach ($downloads as $download) {
@@ -358,7 +371,7 @@ final class ContentRepository
             'file_name' => 'Android',
             'file_size' => '95 MB',
             'notes' => 'Android 8 trở lên.',
-            'download_url' => '#',
+            'download_url' => '/file/Ninjaschoolblue.apk',
         ]];
     }
 
@@ -520,4 +533,3 @@ final class ContentRepository
         return number_format($size, $precision, '.', '') . ' ' . $units[$unitIndex];
     }
 }
-
