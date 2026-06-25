@@ -12,12 +12,14 @@ use Throwable;
 
 final class AdminController
 {
+    private const ADMIN_PAGE_SIZE = 20;
     private const ROLE_ADMIN = 99;
     private const ROLE_COLLABORATOR = 1;
     private const ROLE_USER = 0;
     private const REGISTER_BONUS_AMOUNT = 5000000;
     private ?array $userTableSchema = null;
     private ?array $postsTableSchema = null;
+    private ?array $itemTableSchema = null;
 
     public function login(): never
     {
@@ -96,6 +98,7 @@ final class AdminController
             'admin' => $admin,
             'section' => 'dashboard',
             'stats' => $this->dashboardStats(),
+            'chart' => $this->dashboardChart(),
             'flash' => $this->pullFlash(),
         ]);
     }
@@ -105,9 +108,27 @@ final class AdminController
         $admin = $this->requireAdmin();
         $registerBonusEnabled = $this->registerBonusEnabled();
         $search = trim((string) ($_GET['q'] ?? ''));
-        $rows = $search !== ''
-            ? $this->searchUsers($search)
-            : $this->fetchAll('select id, username, name, email, status, activated, active, role, balance, tongnap, tongNapThang, tongNapTuan, quanew from users order by id desc limit 200');
+        $listing = $search !== ''
+            ? $this->paginateRows(
+                'select count(*) from users
+                 where lower(username) like :search
+                    or lower(coalesce(name, \'\')) like :search
+                    or lower(coalesce(email, \'\')) like :search',
+                'select id, username, name, email, status, activated, active, role, balance, tongnap, tongNapThang, tongNapTuan, quanew
+                 from users
+                 where lower(username) like :search
+                    or lower(coalesce(name, \'\')) like :search
+                    or lower(coalesce(email, \'\')) like :search
+                 order by id desc',
+                ['search' => '%' . strtolower($search) . '%'],
+                ['q' => $search]
+            )
+            : $this->paginateRows(
+                'select count(*) from users',
+                'select id, username, name, email, status, activated, active, role, balance, tongnap, tongNapThang, tongNapTuan, quanew
+                 from users
+                 order by id desc'
+            );
 
         View::render('admin/list', [
             'title' => 'Admin - Users',
@@ -125,7 +146,8 @@ final class AdminController
                 'enableLabel' => 'Bat thuong dang ky',
                 'disableLabel' => 'Tat thuong dang ky',
             ]],
-            'rows' => $rows,
+            'rows' => $listing['rows'],
+            'pagination' => $listing['pagination'],
             'columns' => [
                 ['key' => 'id', 'label' => 'ID'],
                 ['key' => 'name', 'label' => 'Hiển thị'],
@@ -320,6 +342,10 @@ final class AdminController
     public function posts(): never
     {
         $admin = $this->requireAdmin();
+        $listing = $this->paginateRows(
+            'select count(*) from posts',
+            'select * from posts order by ' . $this->postsOrderBy()
+        );
 
         View::render('admin/list', [
             'title' => "Admin - Tin t\u{1EE9}c",
@@ -327,7 +353,8 @@ final class AdminController
             'section' => 'posts',
             'heading' => "Danh s\u{00E1}ch tin t\u{1EE9}c",
             'createUrl' => '/admin/posts/create',
-            'rows' => $this->fetchAll('select * from posts order by ' . $this->postsOrderBy() . ' limit 200'),
+            'rows' => $listing['rows'],
+            'pagination' => $listing['pagination'],
             'columns' => [
                 ['key' => 'id', 'label' => 'ID'],
                 ['key' => 'sort_order', 'label' => 'Index'],
@@ -341,6 +368,33 @@ final class AdminController
             'actions' => $this->isCollaborator($admin)
                 ? ['edit' => '/admin/posts/%s/edit']
                 : ['edit' => '/admin/posts/%s/edit', 'delete' => '/admin/posts/%s/delete'],
+            'flash' => $this->pullFlash(),
+        ]);
+    }
+
+    public function items(): never
+    {
+        $admin = $this->requireAdmin();
+        $search = trim((string) ($_GET['q'] ?? ''));
+        $listing = $search !== ''
+            ? $this->paginateItemSearch($search)
+            : $this->paginateRows(
+                'select count(*) from item',
+                'select * from item order by id desc'
+            );
+
+        View::render('admin/list', [
+            'title' => 'Admin - Items',
+            'admin' => $admin,
+            'section' => 'items',
+            'heading' => 'Danh sach item',
+            'description' => 'Xem thong tin tu bang item trong DB.',
+            'searchUrl' => '/admin/items',
+            'searchValue' => $search,
+            'searchPlaceholder' => 'Tim theo ID, ten item hoac thong tin item',
+            'rows' => $listing['rows'],
+            'pagination' => $listing['pagination'],
+            'columns' => $this->itemListColumns(),
             'flash' => $this->pullFlash(),
         ]);
     }
@@ -505,6 +559,13 @@ final class AdminController
     {
         $admin = $this->requireAdmin();
         $paymentEnabled = $this->paymentEnabled();
+        $listing = $this->paginateRows(
+            'select count(*) from payments p',
+            'select p.*, u.username
+             from payments p
+             left join users u on u.id = p.user_id
+             order by p.created_at desc, p.id desc'
+        );
 
         View::render('admin/list', [
             'title' => 'Admin - Payments',
@@ -516,13 +577,8 @@ final class AdminController
                 : "Ch\u{1EE9}c n\u{0103}ng n\u{1EA1}p ti\u{1EC1}n \u{0111}ang t\u{1EAF}t.",
             'paymentEnabled' => $paymentEnabled,
             'paymentToggleUrl' => '/admin/payments/toggle',
-            'rows' => $this->fetchAll(
-                'select p.*, u.username
-                 from payments p
-                 left join users u on u.id = p.user_id
-                 order by p.created_at desc, p.id desc
-                 limit 200'
-            ),
+            'rows' => $listing['rows'],
+            'pagination' => $listing['pagination'],
             'columns' => [
                 ['key' => 'id', 'label' => 'ID'],
                 ['key' => 'user_id', 'label' => 'User ID'],
@@ -602,14 +658,30 @@ final class AdminController
     {
         $admin = $this->requireAdmin();
         $search = trim((string) ($_GET['q'] ?? ''));
-        $rows = $search !== ''
-            ? $this->searchFeedbacks($search)
-            : $this->fetchAll(
+        $listing = $search !== ''
+            ? $this->paginateRows(
+                'select count(*)
+                 from user_feedback f
+                 left join users u on u.id = f.user_id
+                 where lower(coalesce(u.username, \'\')) like :search
+                    or lower(coalesce(f.subject, \'\')) like :search
+                    or lower(coalesce(f.content, \'\')) like :search',
                 'select f.id, f.user_id, u.username, f.type, f.subject, f.status, f.created_at, f.updated_at
                  from user_feedback f
                  left join users u on u.id = f.user_id
-                 order by f.created_at desc, f.id desc
-                 limit 200'
+                 where lower(coalesce(u.username, \'\')) like :search
+                    or lower(coalesce(f.subject, \'\')) like :search
+                    or lower(coalesce(f.content, \'\')) like :search
+                 order by f.created_at desc, f.id desc',
+                ['search' => '%' . strtolower($search) . '%'],
+                ['q' => $search]
+            )
+            : $this->paginateRows(
+                'select count(*) from user_feedback',
+                'select f.id, f.user_id, u.username, f.type, f.subject, f.status, f.created_at, f.updated_at
+                 from user_feedback f
+                 left join users u on u.id = f.user_id
+                 order by f.created_at desc, f.id desc'
             );
 
         View::render('admin/list', [
@@ -621,7 +693,8 @@ final class AdminController
             'searchUrl' => '/admin/feedbacks',
             'searchValue' => $search,
             'searchPlaceholder' => 'Tìm theo username, tiêu đề hoặc nội dung',
-            'rows' => $rows,
+            'rows' => $listing['rows'],
+            'pagination' => $listing['pagination'],
             'columns' => [
                 ['key' => 'id', 'label' => 'ID'],
                 ['key' => 'username', 'label' => 'User'],
@@ -672,6 +745,10 @@ final class AdminController
     public function banks(): never
     {
         $admin = $this->requireAdmin();
+        $listing = $this->paginateRows(
+            'select count(*) from bank_accounts',
+            'select * from bank_accounts order by sort_order asc, id desc'
+        );
 
         View::render('admin/list', [
             'title' => 'Admin - Bank Accounts',
@@ -679,7 +756,8 @@ final class AdminController
             'section' => 'banks',
             'heading' => "Danh s\u{00E1}ch t\u{00E0}i kho\u{1EA3}n ng\u{00E2}n h\u{00E0}ng",
             'createUrl' => '/admin/banks/create',
-            'rows' => $this->fetchAll('select * from bank_accounts order by sort_order asc, id desc'),
+            'rows' => $listing['rows'],
+            'pagination' => $listing['pagination'],
             'columns' => [
                 ['key' => 'id', 'label' => 'ID'],
                 ['key' => 'bank_name', 'label' => 'Bank'],
@@ -791,6 +869,10 @@ final class AdminController
     public function downloads(): never
     {
         $admin = $this->requireAdmin();
+        $listing = $this->paginateRows(
+            'select count(*) from downloads',
+            'select * from downloads order by sort_order asc, id desc'
+        );
 
         View::render('admin/list', [
             'title' => 'Admin - Downloads',
@@ -798,7 +880,8 @@ final class AdminController
             'section' => 'downloads',
             'heading' => "Danh s\u{00E1}ch download",
             'createUrl' => '/admin/downloads/create',
-            'rows' => $this->fetchAll('select * from downloads order by sort_order asc, id desc'),
+            'rows' => $listing['rows'],
+            'pagination' => $listing['pagination'],
             'columns' => [
                 ['key' => 'id', 'label' => 'ID'],
                 ['key' => 'platform', 'label' => 'Platform'],
@@ -908,9 +991,357 @@ final class AdminController
         $this->redirectWithFlash('/admin/downloads', "\u{0110}\u{00E3} x\u{00F3}a download.");
     }
 
+    public function ninPhucLoi(): never
+    {
+        $admin = $this->requireAdmin();
+        $search = trim((string) ($_GET['q'] ?? ''));
+        $subitem = trim((string) ($_GET['subitem'] ?? ''));
+        $subitemOptions = $this->ninPhucLoiSubitemOptions();
+        $conditions = [];
+        $params = [];
+        $query = [];
+
+        if ($search !== '') {
+            $conditions[] = '(lower(coalesce(tab_title, \'\')) like :search
+                or lower(coalesce(sub_title, \'\')) like :search
+                or lower(coalesce(pkg_name, \'\')) like :search)';
+            $params['search'] = '%' . strtolower($search) . '%';
+            $query['q'] = $search;
+        }
+
+        if ($subitem !== '') {
+            $conditions[] = 'sub_title = :subitem';
+            $params['subitem'] = $subitem;
+            $query['subitem'] = $subitem;
+        }
+
+        $whereSql = $conditions === [] ? '' : ' where ' . implode(' and ', $conditions);
+        $listing = $this->paginateRows(
+            'select count(*) from nin_phucloi' . $whereSql,
+            'select * from nin_phucloi' . $whereSql . ' order by id desc',
+            $params,
+            $query
+        );
+
+        View::render('admin/list', [
+            'title' => 'Admin - Nin Phuc Loi',
+            'admin' => $admin,
+            'section' => 'nin_phucloi',
+            'heading' => 'Danh sach nin phuc loi',
+            'description' => 'Quan ly cac goi phuc loi va du lieu phan thuong.',
+            'createUrl' => '/admin/nin-phucloi/create',
+            'searchUrl' => '/admin/nin-phucloi',
+            'searchValue' => $search,
+            'searchPlaceholder' => 'Tim theo tab, sub hoac ten goi',
+            'filters' => [[
+                'name' => 'subitem',
+                'label' => 'Subitem',
+                'value' => $subitem,
+                'options' => $subitemOptions,
+            ]],
+            'rows' => $listing['rows'],
+            'pagination' => $listing['pagination'],
+            'columns' => [
+                ['key' => 'id', 'label' => 'ID'],
+                ['key' => 'tab_index', 'label' => 'Tab'],
+                ['key' => 'tab_title', 'label' => 'Tab title'],
+                ['key' => 'sub_index', 'label' => 'Sub'],
+                ['key' => 'sub_title', 'label' => 'Sub title'],
+                ['key' => 'pkg_name', 'label' => 'Package'],
+                ['key' => 'pkg_price', 'label' => 'Price', 'format' => 'money'],
+            ],
+            'actions' => ['edit' => '/admin/nin-phucloi/%s/edit', 'delete' => '/admin/nin-phucloi/%s/delete'],
+            'flash' => $this->pullFlash(),
+        ]);
+    }
+
+    public function ninPhucLoiForm(?int $id = null): never
+    {
+        $admin = $this->requireAdmin();
+        $row = $id ? $this->findRow('nin_phucloi', $id) : null;
+
+        if ($id && !$row) {
+            $this->redirectWithFlash('/admin/nin-phucloi', 'Khong tim thay ban ghi nin phuc loi.', 'error');
+        }
+
+        View::render('admin/form', [
+            'title' => $id ? 'Admin - Sua nin phuc loi' : 'Admin - Them nin phuc loi',
+            'admin' => $admin,
+            'section' => 'nin_phucloi',
+            'heading' => $id ? 'Sua nin phuc loi' : 'Them nin phuc loi',
+            'backUrl' => '/admin/nin-phucloi',
+            'actionUrl' => '/admin/nin-phucloi/save',
+            'row' => $row ?? [
+                'tab_index' => 0,
+                'sub_index' => 0,
+                'sub_type' => 0,
+                'sub_icon' => 0,
+                'pkg_index' => 0,
+                'pkg_price' => 0,
+                'data' => '{}',
+            ],
+            'fields' => [
+                ['name' => 'tab_index', 'label' => 'Tab index', 'type' => 'number', 'required' => true],
+                ['name' => 'tab_title', 'label' => 'Tab title', 'required' => true],
+                ['name' => 'sub_index', 'label' => 'Sub index', 'type' => 'number', 'required' => true],
+                ['name' => 'sub_title', 'label' => 'Sub title', 'required' => true],
+                ['name' => 'sub_type', 'label' => 'Sub type', 'type' => 'number', 'required' => true],
+                ['name' => 'sub_icon', 'label' => 'Sub icon', 'type' => 'number', 'required' => true],
+                ['name' => 'pkg_index', 'label' => 'Package index', 'type' => 'number', 'required' => true],
+                ['name' => 'pkg_name', 'label' => 'Package name', 'required' => true],
+                ['name' => 'pkg_price', 'label' => 'Package price', 'type' => 'number', 'required' => true],
+                ['name' => 'data', 'label' => 'Data', 'type' => 'textarea', 'rows' => 10],
+            ],
+            'flash' => $this->pullFlash(),
+        ]);
+    }
+
+    public function confirmNinPhucLoiDelete(int $id): never
+    {
+        $admin = $this->requireAdmin();
+        $row = $this->findRow('nin_phucloi', $id);
+
+        if (!$row) {
+            $this->redirectWithFlash('/admin/nin-phucloi', 'Khong tim thay ban ghi nin phuc loi.', 'error');
+        }
+
+        View::render('admin/delete', [
+            'title' => 'Admin - Xoa nin phuc loi',
+            'admin' => $admin,
+            'section' => 'nin_phucloi',
+            'heading' => 'Xoa nin phuc loi',
+            'message' => 'Ban co chac chan muon xoa ban ghi nin phuc loi nay?',
+            'row' => $row,
+            'summary' => ['ID' => 'id', 'Tab' => 'tab_title', 'Sub' => 'sub_title', 'Package' => 'pkg_name'],
+            'actionUrl' => '/admin/nin-phucloi/delete',
+            'backUrl' => '/admin/nin-phucloi',
+            'flash' => $this->pullFlash(),
+        ]);
+    }
+
+    public function saveNinPhucLoi(): never
+    {
+        $this->requireAdmin();
+        $id = (int) ($_POST['id'] ?? 0);
+        $data = [
+            'tab_index' => (int) ($_POST['tab_index'] ?? 0),
+            'tab_title' => trim((string) ($_POST['tab_title'] ?? '')),
+            'sub_index' => (int) ($_POST['sub_index'] ?? 0),
+            'sub_title' => trim((string) ($_POST['sub_title'] ?? '')),
+            'sub_type' => (int) ($_POST['sub_type'] ?? 0),
+            'sub_icon' => (int) ($_POST['sub_icon'] ?? 0),
+            'pkg_index' => (int) ($_POST['pkg_index'] ?? 0),
+            'pkg_name' => trim((string) ($_POST['pkg_name'] ?? '')),
+            'pkg_price' => (int) ($_POST['pkg_price'] ?? 0),
+            'data' => trim((string) ($_POST['data'] ?? '')) ?: '{}',
+        ];
+
+        if ($data['tab_title'] === '' || $data['sub_title'] === '' || $data['pkg_name'] === '') {
+            $this->redirectWithFlash($id ? '/admin/nin-phucloi/' . $id . '/edit' : '/admin/nin-phucloi/create', 'Thong tin nin phuc loi chua day du.', 'error');
+        }
+
+        try {
+            if ($id > 0) {
+                $data['id'] = $id;
+                Database::connection()->prepare(
+                    'update nin_phucloi
+                     set tab_index = :tab_index, tab_title = :tab_title, sub_index = :sub_index, sub_title = :sub_title, sub_type = :sub_type,
+                         sub_icon = :sub_icon, pkg_index = :pkg_index, pkg_name = :pkg_name, pkg_price = :pkg_price, data = :data
+                     where id = :id'
+                )->execute($data);
+            } else {
+                Database::connection()->prepare(
+                    'insert into nin_phucloi (tab_index, tab_title, sub_index, sub_title, sub_type, sub_icon, pkg_index, pkg_name, pkg_price, data)
+                     values (:tab_index, :tab_title, :sub_index, :sub_title, :sub_type, :sub_icon, :pkg_index, :pkg_name, :pkg_price, :data)'
+                )->execute($data);
+            }
+        } catch (Throwable) {
+            $this->redirectWithFlash($id ? '/admin/nin-phucloi/' . $id . '/edit' : '/admin/nin-phucloi/create', 'Khong the luu nin phuc loi.', 'error');
+        }
+
+        $this->redirectWithFlash('/admin/nin-phucloi', 'Da luu nin phuc loi.');
+    }
+
+    public function deleteNinPhucLoi(): never
+    {
+        $this->requireAdmin();
+        Database::connection()->prepare('delete from nin_phucloi where id = :id')->execute(['id' => (int) ($_POST['id'] ?? 0)]);
+        $this->redirectWithFlash('/admin/nin-phucloi', 'Da xoa nin phuc loi.');
+    }
+
+    public function giftCodes(): never
+    {
+        $admin = $this->requireAdmin();
+        $search = trim((string) ($_GET['q'] ?? ''));
+        $listing = $search !== ''
+            ? $this->paginateRows(
+                'select count(*) from gift_codes
+                 where lower(coalesce(code, \'\')) like :search
+                    or lower(coalesce(items, \'\')) like :search',
+                'select * from gift_codes
+                 where lower(coalesce(code, \'\')) like :search
+                    or lower(coalesce(items, \'\')) like :search
+                 order by id desc',
+                ['search' => '%' . strtolower($search) . '%'],
+                ['q' => $search]
+            )
+            : $this->paginateRows(
+                'select count(*) from gift_codes',
+                'select * from gift_codes order by id desc'
+            );
+
+        View::render('admin/list', [
+            'title' => 'Admin - Gift Codes',
+            'admin' => $admin,
+            'section' => 'gift_codes',
+            'heading' => 'Danh sach gift code',
+            'description' => 'Quan ly ma code, vat pham va thoi gian het han.',
+            'createUrl' => '/admin/gift-codes/create',
+            'searchUrl' => '/admin/gift-codes',
+            'searchValue' => $search,
+            'searchPlaceholder' => 'Tim theo code hoac items',
+            'rows' => $listing['rows'],
+            'pagination' => $listing['pagination'],
+            'columns' => [
+                ['key' => 'id', 'label' => 'ID'],
+                ['key' => 'server_id', 'label' => 'Server'],
+                ['key' => 'code', 'label' => 'Code'],
+                ['key' => 'type', 'label' => 'Type'],
+                ['key' => 'coin', 'label' => 'Coin', 'format' => 'money'],
+                ['key' => 'gold', 'label' => 'Gold', 'format' => 'money'],
+                ['key' => 'yen', 'label' => 'Yen', 'format' => 'money'],
+                ['key' => 'status', 'label' => 'Status'],
+                ['key' => 'luotnhap', 'label' => 'Luot nhap'],
+                ['key' => 'expires_at', 'label' => 'Expires', 'format' => 'datetime'],
+            ],
+            'actions' => ['edit' => '/admin/gift-codes/%s/edit', 'delete' => '/admin/gift-codes/%s/delete'],
+            'flash' => $this->pullFlash(),
+        ]);
+    }
+
+    public function giftCodeForm(?int $id = null): never
+    {
+        $admin = $this->requireAdmin();
+        $row = $id ? $this->findRow('gift_codes', $id) : null;
+
+        if ($id && !$row) {
+            $this->redirectWithFlash('/admin/gift-codes', 'Khong tim thay gift code.', 'error');
+        }
+
+        View::render('admin/form', [
+            'title' => $id ? 'Admin - Sua gift code' : 'Admin - Them gift code',
+            'admin' => $admin,
+            'section' => 'gift_codes',
+            'heading' => $id ? 'Sua gift code' : 'Them gift code',
+            'backUrl' => '/admin/gift-codes',
+            'actionUrl' => '/admin/gift-codes/save',
+            'row' => $row ?? [
+                'type' => 0,
+                'coin' => 0,
+                'gold' => 0,
+                'yen' => 0,
+                'items' => '[]',
+                'status' => 0,
+                'luotnhap' => 1,
+                'expires_at' => date('Y-m-d H:i:s', strtotime('+7 days')),
+            ],
+            'fields' => [
+                ['name' => 'server_id', 'label' => 'Server ID', 'type' => 'number'],
+                ['name' => 'type', 'label' => 'Type', 'type' => 'number', 'required' => true],
+                ['name' => 'code', 'label' => 'Code', 'required' => true],
+                ['name' => 'coin', 'label' => 'Coin', 'type' => 'number', 'required' => true],
+                ['name' => 'gold', 'label' => 'Gold', 'type' => 'number', 'required' => true],
+                ['name' => 'yen', 'label' => 'Yen', 'type' => 'number', 'required' => true],
+                ['name' => 'items', 'label' => 'Items', 'type' => 'textarea', 'rows' => 8],
+                ['name' => 'status', 'label' => 'Status', 'type' => 'number', 'required' => true],
+                ['name' => 'luotnhap', 'label' => 'Luot nhap', 'type' => 'number', 'required' => true],
+                ['name' => 'expires_at', 'label' => 'Expires at', 'type' => 'datetime-local'],
+            ],
+            'flash' => $this->pullFlash(),
+        ]);
+    }
+
+    public function confirmGiftCodeDelete(int $id): never
+    {
+        $admin = $this->requireAdmin();
+        $row = $this->findRow('gift_codes', $id);
+
+        if (!$row) {
+            $this->redirectWithFlash('/admin/gift-codes', 'Khong tim thay gift code.', 'error');
+        }
+
+        View::render('admin/delete', [
+            'title' => 'Admin - Xoa gift code',
+            'admin' => $admin,
+            'section' => 'gift_codes',
+            'heading' => 'Xoa gift code',
+            'message' => 'Ban co chac chan muon xoa gift code nay?',
+            'row' => $row,
+            'summary' => ['ID' => 'id', 'Code' => 'code', 'Server' => 'server_id', 'Expires' => 'expires_at'],
+            'actionUrl' => '/admin/gift-codes/delete',
+            'backUrl' => '/admin/gift-codes',
+            'flash' => $this->pullFlash(),
+        ]);
+    }
+
+    public function saveGiftCode(): never
+    {
+        $this->requireAdmin();
+        $id = (int) ($_POST['id'] ?? 0);
+        $code = strtoupper(trim((string) ($_POST['code'] ?? '')));
+        $data = [
+            'server_id' => $this->nullableIntFromRequest('server_id'),
+            'type' => (int) ($_POST['type'] ?? 0),
+            'code' => $code !== '' ? $code : null,
+            'coin' => (int) ($_POST['coin'] ?? 0),
+            'gold' => (int) ($_POST['gold'] ?? 0),
+            'yen' => (int) ($_POST['yen'] ?? 0),
+            'items' => trim((string) ($_POST['items'] ?? '')) ?: '[]',
+            'status' => (int) ($_POST['status'] ?? 0),
+            'expires_at' => $this->nullableDateTimeFromRequest('expires_at'),
+            'luotnhap' => (int) ($_POST['luotnhap'] ?? 0),
+        ];
+
+        if ($data['code'] === null) {
+            $this->redirectWithFlash($id ? '/admin/gift-codes/' . $id . '/edit' : '/admin/gift-codes/create', 'Code khong duoc de trong.', 'error');
+        }
+
+        try {
+            if ($id > 0) {
+                $data['id'] = $id;
+                Database::connection()->prepare(
+                    'update gift_codes
+                     set server_id = :server_id, type = :type, code = :code, coin = :coin, gold = :gold, yen = :yen, items = :items,
+                         status = :status, expires_at = :expires_at, updated_at = now(), luotnhap = :luotnhap
+                     where id = :id'
+                )->execute($data);
+            } else {
+                Database::connection()->prepare(
+                    'insert into gift_codes (server_id, type, code, coin, gold, yen, items, status, expires_at, created_at, updated_at, luotnhap)
+                     values (:server_id, :type, :code, :coin, :gold, :yen, :items, :status, :expires_at, now(), now(), :luotnhap)'
+                )->execute($data);
+            }
+        } catch (Throwable) {
+            $this->redirectWithFlash($id ? '/admin/gift-codes/' . $id . '/edit' : '/admin/gift-codes/create', 'Khong the luu gift code.', 'error');
+        }
+
+        $this->redirectWithFlash('/admin/gift-codes', 'Da luu gift code.');
+    }
+
+    public function deleteGiftCode(): never
+    {
+        $this->requireAdmin();
+        Database::connection()->prepare('delete from gift_codes where id = :id')->execute(['id' => (int) ($_POST['id'] ?? 0)]);
+        $this->redirectWithFlash('/admin/gift-codes', 'Da xoa gift code.');
+    }
+
     public function rates(): never
     {
         $admin = $this->requireAdmin();
+        $listing = $this->paginateRows(
+            'select count(*) from promotion_campaigns',
+            'select * from promotion_campaigns order by starts_at desc, id desc'
+        );
 
         View::render('admin/list', [
             'title' => 'Admin - Rate',
@@ -923,7 +1354,8 @@ final class AdminController
             'createUrl' => '/admin/rates/create',
             'banks' => $this->fetchAll('select id, bank_name, bank_rate, is_active from bank_accounts order by sort_order asc, id desc'),
             'activeCampaign' => $this->activeCampaign(),
-            'rows' => $this->fetchAll('select * from promotion_campaigns order by starts_at desc, id desc'),
+            'rows' => $listing['rows'],
+            'pagination' => $listing['pagination'],
             'columns' => [
                 ['key' => 'id', 'label' => 'ID'],
                 ['key' => 'name', 'label' => 'Campaign'],
@@ -1113,6 +1545,35 @@ final class AdminController
         ];
     }
 
+    private function ninPhucLoiSubitemOptions(): array
+    {
+        $options = [];
+
+        try {
+            $statement = Database::connection()->query(
+                'select distinct sub_title
+                 from nin_phucloi
+                 where coalesce(sub_title, \'\') <> \'\'
+                 order by sub_title asc'
+            );
+
+            foreach ($statement->fetchAll(PDO::FETCH_ASSOC) ?: [] as $row) {
+                $value = trim((string) ($row['sub_title'] ?? ''));
+
+                if ($value !== '') {
+                    $options[] = [
+                        'value' => $value,
+                        'label' => $value,
+                    ];
+                }
+            }
+        } catch (Throwable) {
+            return [];
+        }
+
+        return $options;
+    }
+
     private function userRoleFromRequest(int $id): int
     {
         $requestedRole = (int) ($_POST['role'] ?? self::ROLE_USER);
@@ -1164,11 +1625,23 @@ final class AdminController
     {
         return [
             'users' => $this->scalar('select count(*) from users'),
-            'posts' => $this->scalar('select count(*) from posts'),
             'payments' => $this->scalar('select count(*) from payments'),
-            'banks' => $this->scalar('select count(*) from bank_accounts'),
-            'downloads' => $this->scalar('select count(*) from downloads'),
-            'campaigns' => $this->scalar('select count(*) from promotion_campaigns'),
+            'posts' => $this->scalar('select count(*) from posts'),
+        ];
+    }
+
+    private function dashboardChart(): array
+    {
+        $days = 14;
+        $end = new \DateTimeImmutable('today');
+        $start = $end->modify('-' . ($days - 1) . ' days');
+        $userSeries = $this->dailyCountSeries('users', 'created_at', $start, $end);
+        $paymentSeries = $this->dailyCountSeries('payments', 'created_at', $start, $end);
+
+        return [
+            'labels' => $userSeries['labels'],
+            'users' => $userSeries['values'],
+            'payments' => $paymentSeries['values'],
         ];
     }
 
@@ -1181,26 +1654,136 @@ final class AdminController
         }
     }
 
-    private function searchUsers(string $search): array
+    private function fetchPrepared(string $sql, array $params = []): array
     {
         try {
-            $statement = Database::connection()->prepare(
-                'select id, username, name, email, status, activated, active, role, balance, tongnap, tongNapThang, tongNapTuan, quanew
-                 from users
-                 where lower(username) like :search
-                    or lower(coalesce(name, \'\')) like :search
-                    or lower(coalesce(email, \'\')) like :search
-                 order by id desc
-                 limit 200'
-            );
-            $statement->execute([
-                'search' => '%' . strtolower($search) . '%',
-            ]);
+            $statement = Database::connection()->prepare($sql);
+            $this->bindParams($statement, $params);
+            $statement->execute();
 
             return $statement->fetchAll(PDO::FETCH_ASSOC) ?: [];
         } catch (Throwable) {
             return [];
         }
+    }
+
+    private function scalarPrepared(string $sql, array $params = []): int
+    {
+        try {
+            $statement = Database::connection()->prepare($sql);
+            $this->bindParams($statement, $params);
+            $statement->execute();
+
+            return (int) $statement->fetchColumn();
+        } catch (Throwable) {
+            return 0;
+        }
+    }
+
+    private function dailyCountSeries(string $table, string $dateColumn, \DateTimeImmutable $start, \DateTimeImmutable $end): array
+    {
+        $labels = [];
+        $valuesByDay = [];
+        $cursor = $start;
+
+        while ($cursor <= $end) {
+            $day = $cursor->format('Y-m-d');
+            $labels[] = $cursor->format('d/m');
+            $valuesByDay[$day] = 0;
+            $cursor = $cursor->modify('+1 day');
+        }
+
+        try {
+            $statement = Database::connection()->prepare(
+                "select date({$dateColumn}) as day, count(*) as total
+                 from {$table}
+                 where {$dateColumn} >= :start and {$dateColumn} < :end
+                 group by date({$dateColumn})
+                 order by day asc"
+            );
+            $statement->execute([
+                'start' => $start->format('Y-m-d 00:00:00'),
+                'end' => $end->modify('+1 day')->format('Y-m-d 00:00:00'),
+            ]);
+
+            foreach ($statement->fetchAll(PDO::FETCH_ASSOC) ?: [] as $row) {
+                $day = (string) ($row['day'] ?? '');
+
+                if (isset($valuesByDay[$day])) {
+                    $valuesByDay[$day] = (int) ($row['total'] ?? 0);
+                }
+            }
+        } catch (Throwable) {
+        }
+
+        return [
+            'labels' => $labels,
+            'values' => array_values($valuesByDay),
+        ];
+    }
+
+    private function paginateRows(string $countSql, string $rowsSql, array $params = [], array $query = []): array
+    {
+        $pageSize = self::ADMIN_PAGE_SIZE;
+        $totalRows = $this->scalarPrepared($countSql, $params);
+        $totalPages = max(1, (int) ceil($totalRows / $pageSize));
+        $currentPage = min($this->currentPage(), $totalPages);
+        $offset = ($currentPage - 1) * $pageSize;
+        $rows = $this->fetchPrepared(
+            $rowsSql . ' limit :limit offset :offset',
+            array_merge($params, ['limit' => $pageSize, 'offset' => $offset])
+        );
+
+        return [
+            'rows' => $rows,
+            'pagination' => [
+                'currentPage' => $currentPage,
+                'totalPages' => $totalPages,
+                'totalRows' => $totalRows,
+                'pageSize' => $pageSize,
+                'query' => array_filter($query, static fn (mixed $value): bool => $value !== ''),
+            ],
+        ];
+    }
+
+    private function paginateItemSearch(string $search): array
+    {
+        $columns = $this->itemSearchColumns();
+        $conditions = [];
+        $params = [
+            'search' => '%' . strtolower($search) . '%',
+        ];
+
+        if (ctype_digit($search) && $this->itemHasColumn('id')) {
+            $conditions[] = 'id = :id';
+            $params['id'] = (int) $search;
+        }
+
+        foreach ($columns as $column) {
+            $conditions[] = 'lower(coalesce(cast(' . $this->quoteIdentifier($column) . ' as char), \'\')) like :search';
+        }
+
+        if ($conditions === []) {
+            return [
+                'rows' => [],
+                'pagination' => [
+                    'currentPage' => 1,
+                    'totalPages' => 1,
+                    'totalRows' => 0,
+                    'pageSize' => self::ADMIN_PAGE_SIZE,
+                    'query' => ['q' => $search],
+                ],
+            ];
+        }
+
+        $whereSql = implode(' or ', $conditions);
+
+        return $this->paginateRows(
+            'select count(*) from item where ' . $whereSql,
+            'select * from item where ' . $whereSql . ' order by id desc',
+            $params,
+            ['q' => $search]
+        );
     }
 
     private function storeNewsImageUpload(mixed $file, bool $required = false): ?string
@@ -1263,32 +1846,26 @@ final class AdminController
         return '/uploads/news/' . $filename;
     }
 
-    private function searchFeedbacks(string $search): array
+    private function bindParams(\PDOStatement $statement, array $params): void
     {
-        try {
-            $statement = Database::connection()->prepare(
-                'select f.id, f.user_id, u.username, f.type, f.subject, f.status, f.created_at, f.updated_at
-                 from user_feedback f
-                 left join users u on u.id = f.user_id
-                 where lower(coalesce(u.username, \'\')) like :search
-                    or lower(coalesce(f.subject, \'\')) like :search
-                    or lower(coalesce(f.content, \'\')) like :search
-                 order by f.created_at desc, f.id desc
-                 limit 200'
-            );
-            $statement->execute([
-                'search' => '%' . strtolower($search) . '%',
-            ]);
-
-            return $statement->fetchAll(PDO::FETCH_ASSOC) ?: [];
-        } catch (Throwable) {
-            return [];
+        foreach ($params as $key => $value) {
+            $type = match (true) {
+                is_int($value) => PDO::PARAM_INT,
+                $value === null => PDO::PARAM_NULL,
+                default => PDO::PARAM_STR,
+            };
+            $statement->bindValue(is_string($key) ? ':' . $key : $key + 1, $value, $type);
         }
+    }
+
+    private function currentPage(): int
+    {
+        return max(1, (int) ($_GET['page'] ?? 1));
     }
 
     private function findRow(string $table, int $id): ?array
     {
-        $allowed = ['users', 'posts', 'payments', 'bank_accounts', 'downloads', 'promotion_campaigns', 'user_feedback'];
+        $allowed = ['users', 'posts', 'payments', 'bank_accounts', 'downloads', 'promotion_campaigns', 'user_feedback', 'nin_phucloi', 'gift_codes'];
 
         if ($id <= 0 || !in_array($table, $allowed, true)) {
             return null;
@@ -1376,6 +1953,26 @@ final class AdminController
         $normalized = preg_replace('/[^0-9]/', '', $raw) ?? '0';
 
         return max(0, (int) $normalized);
+    }
+
+    private function nullableIntFromRequest(string $key): ?int
+    {
+        $raw = trim((string) ($_POST[$key] ?? ''));
+
+        return $raw === '' ? null : (int) $raw;
+    }
+
+    private function nullableDateTimeFromRequest(string $key): ?string
+    {
+        $raw = trim((string) ($_POST[$key] ?? ''));
+
+        if ($raw === '') {
+            return null;
+        }
+
+        $time = strtotime($raw);
+
+        return $time ? date('Y-m-d H:i:s', $time) : null;
     }
 
     private function paymentEnabled(): bool
@@ -1543,5 +2140,128 @@ final class AdminController
         }
 
         return $this->postsTableSchema;
+    }
+
+    private function itemListColumns(): array
+    {
+        $schema = $this->itemTableSchema();
+        $hiddenColumns = ['fashion', 'isuptoup'];
+
+        if ($schema === []) {
+            return [
+                ['key' => 'id', 'label' => 'ID'],
+                ['key' => 'name', 'label' => 'Name'],
+            ];
+        }
+
+        $preferred = [
+            'id',
+            'name',
+            'type',
+            'gender',
+            'level',
+            'icon',
+            'part',
+            'description',
+            'created_at',
+            'updated_at',
+        ];
+        $selected = [];
+
+        foreach ($preferred as $column) {
+            if (isset($schema[strtolower($column)]) && !in_array(strtolower($column), $hiddenColumns, true)) {
+                $selected[] = $schema[strtolower($column)]['name'];
+            }
+        }
+
+        foreach ($schema as $column) {
+            if (count($selected) >= 12) {
+                break;
+            }
+
+            if (
+                !in_array(strtolower($column['name']), $hiddenColumns, true)
+                && !in_array($column['name'], $selected, true)
+            ) {
+                $selected[] = $column['name'];
+            }
+        }
+
+        return array_map(function (string $column): array {
+            $definition = [
+                'key' => $column,
+                'label' => $column === 'id' ? 'ID' : $this->humanizeColumnLabel($column),
+            ];
+
+            if (in_array(strtolower($column), ['created_at', 'updated_at'], true)) {
+                $definition['format'] = 'datetime';
+            }
+
+            return $definition;
+        }, $selected);
+    }
+
+    private function itemSearchColumns(): array
+    {
+        $columns = [];
+
+        foreach ($this->itemTableSchema() as $column) {
+            $type = strtolower((string) ($column['type'] ?? ''));
+
+            if (
+                str_contains($type, 'char')
+                || str_contains($type, 'text')
+                || str_contains($type, 'json')
+                || in_array(strtolower($column['name']), ['name', 'description'], true)
+            ) {
+                $columns[] = $column['name'];
+            }
+        }
+
+        return $columns;
+    }
+
+    private function itemHasColumn(string $column): bool
+    {
+        return isset($this->itemTableSchema()[strtolower($column)]);
+    }
+
+    private function itemTableSchema(): array
+    {
+        if ($this->itemTableSchema !== null) {
+            return $this->itemTableSchema;
+        }
+
+        try {
+            $rows = Database::connection()->query('show columns from item')->fetchAll(PDO::FETCH_ASSOC) ?: [];
+            $schema = [];
+
+            foreach ($rows as $row) {
+                $field = (string) ($row['Field'] ?? '');
+
+                if ($field !== '') {
+                    $schema[strtolower($field)] = [
+                        'name' => $field,
+                        'type' => (string) ($row['Type'] ?? ''),
+                    ];
+                }
+            }
+
+            $this->itemTableSchema = $schema;
+        } catch (Throwable) {
+            $this->itemTableSchema = [];
+        }
+
+        return $this->itemTableSchema;
+    }
+
+    private function quoteIdentifier(string $identifier): string
+    {
+        return '`' . str_replace('`', '``', $identifier) . '`';
+    }
+
+    private function humanizeColumnLabel(string $column): string
+    {
+        return ucwords(str_replace('_', ' ', $column));
     }
 }

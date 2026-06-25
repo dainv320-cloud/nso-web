@@ -13,8 +13,8 @@ final class ContentRepository
         '/img/ninja-hero.webp',
         '/img/ns2d-ninja.webp',
         '/img/post-default.webp',
-        '/img/ns2d-bg1.png',
-        '/img/ninjaschool2d-bg1.png',
+        '/img/bg.png',
+        '/img/bg.png',
         '/img/media/banner-test.jpg',
         '/img/media/Char.png',
     ];

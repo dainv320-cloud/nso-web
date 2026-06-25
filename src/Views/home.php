@@ -35,7 +35,7 @@ $homeFormatDate = static function (?string $date): string {
         </div>
     </div>
     <div class="hero-art">
-        <img src="/img/logo.png" alt="Ninja School Blue">
+        <img src="/img/logo-3.png" alt="Ninja School Blue">
     </div>
 </section>
 

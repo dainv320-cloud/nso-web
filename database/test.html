@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ninja School Blue - Huyền thoại ninja trở lại</title>
+    <style>
+        :root {
+            --bg: #140b07;
+            --surface: rgba(28, 17, 9, 0.84);
+            --surface-soft: rgba(28, 17, 9, 0.64);
+            --text: #f3eadb;
+            --muted: #d4c1a1;
+            --gold: #ffd700;
+            --line: #4a2f13;
+            --shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background:
+                linear-gradient(to bottom, rgba(44, 26, 12, 0.4), rgba(23, 13, 6, 0.78)),
+                url("../public/img/bg-2.png") center/cover fixed no-repeat,
+                var(--bg);
+            color: var(--text);
+        }
+
+        a {
+            text-decoration: none;
+            color: inherit;
+        }
+
+        header {
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            border-bottom: 2px solid var(--line);
+            background: rgba(18, 9, 4, 0.95);
+            backdrop-filter: blur(8px);
+        }
+
+        .nav-container,
+        .hero-container,
+        .main-content {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .nav-container {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 20px;
+            padding: 10px 20px;
+        }
+
+        .nav-logo img {
+            height: 42px;
+            width: auto;
+            display: block;
+        }
+
+        .nav-menu {
+            display: flex;
+            list-style: none;
+            gap: 25px;
+        }
+
+        .nav-menu a {
+            color: var(--muted);
+            font-size: 14px;
+            font-weight: bold;
+            text-transform: uppercase;
+            transition: color 0.2s ease;
+        }
+
+        .nav-menu a:hover {
+            color: #5ce1e6;
+        }
+
+        .nav-auth {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
+            padding: 8px 18px;
+            border: 1px solid transparent;
+            border-radius: 5px;
+            font-size: 13px;
+            font-weight: bold;
+            text-transform: uppercase;
+            cursor: pointer;
+        }
+
+        .btn-register {
+            background: linear-gradient(to bottom, #d97706, #b45309);
+            color: #fff;
+            border-color: #f59e0b;
+        }
+
+        .btn-login {
+            background: #22150c;
+            color: var(--muted);
+            border-color: var(--line);
+        }
+
+        .hero-section {
+            position: relative;
+            padding: 60px 20px;
+            border-bottom: 4px solid #36200d;
+            background: url("../public/img/bg-2.png") center/cover no-repeat;
+        }
+
+        .hero-section::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(to right, rgba(23, 13, 6, 0.82), rgba(23, 13, 6, 0.26), rgba(23, 13, 6, 0.82));
+        }
+
+        .hero-container {
+            position: relative;
+            z-index: 2;
+            display: grid;
+            grid-template-columns: 1fr 1.2fr 1fr;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .hero-characters {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .char-main {
+            width: 100%;
+            max-width: 260px;
+            filter: drop-shadow(0 10px 15px rgba(0, 0, 0, 0.7));
+        }
+
+        .hero-center {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 18px;
+            text-align: center;
+        }
+
+        .main-logo {
+            max-width: 210px;
+            width: 100%;
+            filter: drop-shadow(0 0 18px rgba(92, 225, 230, 0.36));
+        }
+
+        .hero-slogan {
+            padding: 8px 20px;
+            border: 1px solid #4a2f13;
+            border-radius: 20px;
+            background: rgba(0, 0, 0, 0.58);
+            color: var(--gold);
+            font-size: 14px;
+            font-weight: bold;
+            letter-spacing: 1px;
+        }
+
+        .btn-play {
+            padding: 15px 40px;
+            border: 2px solid #fff;
+            border-radius: 8px;
+            background: linear-gradient(to bottom, #fbbf24, #d97706);
+            box-shadow: 0 4px 15px rgba(217, 119, 6, 0.5);
+            color: #22150c;
+            font-size: 20px;
+            font-weight: 900;
+            transition: transform 0.2s;
+        }
+
+        .btn-play:hover {
+            transform: scale(1.05);
+        }
+
+        .download-box {
+            padding: 20px;
+            border: 2px solid #5c3a1a;
+            border-radius: 8px;
+            background: rgba(28, 17, 9, 0.9);
+            box-shadow: var(--shadow);
+        }
+
+        .download-title {
+            margin-bottom: 15px;
+            color: var(--gold);
+            font-size: 16px;
+            font-weight: bold;
+            letter-spacing: 1px;
+            text-align: center;
+            text-transform: uppercase;
+        }
+
+        .download-buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .dl-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            padding: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 5px;
+            color: #fff;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        .dl-android { background-color: #1e7e34; }
+        .dl-ios { background-color: #212529; }
+        .dl-pc { background-color: #0056b3; }
+        .dl-java { background-color: #bd2130; }
+
+        .main-content {
+            position: relative;
+            display: grid;
+            grid-template-columns: 1fr 1.5fr;
+            gap: 30px;
+            width: 100vw;
+            max-width: none;
+            margin: 0;
+            margin-left: calc(50% - 50vw);
+            margin-right: calc(50% - 50vw);
+            padding: 38px max(20px, calc((100vw - 1200px) / 2)) 44px;
+            background:
+                linear-gradient(to bottom, rgba(17, 10, 4, 0.76), rgba(17, 10, 4, 0.88)),
+                url("../public/img/bg-d.png") center/cover no-repeat;
+        }
+
+        .main-content > * {
+            position: relative;
+            z-index: 1;
+        }
+
+        .content-box {
+            padding: 20px;
+            border: 1px solid #36200d;
+            border-radius: 6px;
+            background: var(--surface-soft);
+        }
+
+        .box-title {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid var(--line);
+            color: var(--gold);
+            font-size: 18px;
+            text-transform: uppercase;
+        }
+
+        .box-title .more {
+            color: var(--muted);
+            font-size: 11px;
+        }
+
+        .news-item {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 1px dashed #36200d;
+        }
+
+        .news-img {
+            width: 100px;
+            height: 65px;
+            border-radius: 4px;
+            background: #2c1a0c;
+            object-fit: cover;
+        }
+
+        .news-info h4 {
+            margin-bottom: 5px;
+            color: var(--text);
+            font-size: 13px;
+        }
+
+        .news-info h4 span {
+            margin-left: 5px;
+            color: #dc3545;
+            font-size: 10px;
+        }
+
+        .news-date {
+            color: #7a6855;
+            font-size: 11px;
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .feature-item {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            padding: 15px;
+            border: 1px solid #36200d;
+            border-radius: 6px;
+            background: rgba(44, 26, 12, 0.4);
+        }
+
+        .feature-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            background: #4a2f13;
+            color: var(--gold);
+            font-weight: bold;
+        }
+
+        .feature-text h4 {
+            margin-bottom: 3px;
+            color: var(--gold);
+            font-size: 14px;
+        }
+
+        .feature-text p {
+            color: #a8947c;
+            font-size: 12px;
+        }
+
+        @media (max-width: 992px) {
+            .hero-container { grid-template-columns: 1fr; }
+            .hero-characters { display: none; }
+            .main-content { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="nav-container">
+            <div class="nav-logo">
+                <img src="../public/img/logo-3.png" alt="Ninja School Blue Logo">
+            </div>
+            <ul class="nav-menu">
+                <li><a href="#">Trang Chủ</a></li>
+                <li><a href="#">Tin Tức</a></li>
+                <li><a href="#">Tải Game</a></li>
+                <li><a href="#">Hướng Dẫn</a></li>
+                <li><a href="#">Cộng Đồng</a></li>
+                <li><a href="#">Hỗ Trợ</a></li>
+            </ul>
+            <div class="nav-auth">
+                <button class="btn btn-register">Đăng Ký</button>
+                <button class="btn btn-login">Đăng Nhập</button>
+            </div>
+        </div>
+    </header>
+
+    <section class="hero-section">
+        <div class="hero-container">
+            <div class="hero-characters">
+                <img src="https://cdngarenanow-a.akamaihd.net/games/lol/2020/LOL_Landing/assets/images/footer-champion.png" class="char-main" alt="Ninja Character" style="display:none;" onload="this.style.display='block';">
+            </div>
+
+            <div class="hero-center">
+                <img src="../public/img/logo-3.png" class="main-logo" alt="Ninja School Blue">
+                <div class="hero-slogan">HUYỀN THOẠI NINJA - PHIÊN BẢN BLUE TRỞ LẠI TUỔI THƠ</div>
+                <button class="btn-play">CHƠI NGAY</button>
+            </div>
+
+            <div class="download-box">
+                <div class="download-title">Tải Game</div>
+                <div class="download-buttons">
+                    <a href="#" class="dl-btn dl-android">TẢI ANDROID</a>
+                    <a href="#" class="dl-btn dl-ios">TẢI IOS</a>
+                    <a href="#" class="dl-btn dl-pc">TẢI PC</a>
+                    <a href="#" class="dl-btn dl-java">TẢI JAVA</a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <main class="main-content">
+        <section class="content-box">
+            <div class="box-title">
+                <span>Tin Tức - Sự Kiện</span>
+                <a href="#" class="more">XEM THÊM &gt;</a>
+            </div>
+
+            <div class="news-item">
+                <div class="news-img" style="background: #4a2f13 url('https://via.placeholder.com/100x65') center/cover;"></div>
+                <div class="news-info">
+                    <h4>KHAI MỞ MÁY CHỦ MỚI: HỎA LONG <span>HOT</span></h4>
+                    <p class="news-date">30/05/2026</p>
+                </div>
+            </div>
+
+            <div class="news-item">
+                <div class="news-img" style="background: #4a2f13 url('https://via.placeholder.com/100x65') center/cover;"></div>
+                <div class="news-info">
+                    <h4>SỰ KIỆN THÁNG 6: MỞ HỘP SÔI ĐỘNG</h4>
+                    <p class="news-date">28/05/2026</p>
+                </div>
+            </div>
+
+            <div class="news-item">
+                <div class="news-img" style="background: #4a2f13 url('https://via.placeholder.com/100x65') center/cover;"></div>
+                <div class="news-info">
+                    <h4>BOSS THẾ GIỚI: OROCHI XUẤT HIỆN</h4>
+                    <p class="news-date">27/05/2026</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="content-box">
+            <div class="box-title">Tính Năng Nổi Bật</div>
+            <div class="features-grid">
+                <div class="feature-item">
+                    <div class="feature-icon">6</div>
+                    <div class="feature-text">
+                        <h4>6 Môn Phái</h4>
+                        <p>Lựa chọn môn phái phù hợp với bạn.</p>
+                    </div>
+                </div>
+
+                <div class="feature-item">
+                    <div class="feature-icon">GT</div>
+                    <div class="feature-text">
+                        <h4>Hệ Thống Gia Tộc</h4>
+                        <p>Xây dựng gia tộc hùng mạnh.</p>
+                    </div>
+                </div>
+
+                <div class="feature-item">
+                    <div class="feature-icon">B</div>
+                    <div class="feature-text">
+                        <h4>Săn Boss</h4>
+                        <p>Thách thức boss nhận đồ hiếm.</p>
+                    </div>
+                </div>
+
+                <div class="feature-item">
+                    <div class="feature-icon">PK</div>
+                    <div class="feature-text">
+                        <h4>PK Đỉnh Cao</h4>
+                        <p>Đấu trường, tranh đoạt thứ hạng.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+</body>
+</html>

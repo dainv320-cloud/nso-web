@@ -10,10 +10,13 @@ $adminMenu = $isCollaborator
         'dashboard' => ['/admin', 'Tổng quan'],
         'users' => ['/admin/users', 'Tài khoản'],
         'posts' => ['/admin/posts', 'Tin tức'],
+        'items' => ['/admin/items', 'Items'],
         'payments' => ['/admin/payments', 'Payment'],
         'feedbacks' => ['/admin/feedbacks', 'Phản hồi'],
         'banks' => ['/admin/banks', 'Tài khoản ngân hàng'],
         'downloads' => ['/admin/downloads', 'Tải xuống'],
+        'nin_phucloi' => ['/admin/nin-phucloi', 'Nin phúc lợi'],
+        'gift_codes' => ['/admin/gift-codes', 'Gift codes'],
         'rates' => ['/admin/rates', 'Rate & KM'],
     ];
 ?>

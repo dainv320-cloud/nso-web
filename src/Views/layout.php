@@ -127,7 +127,7 @@ $bodyClasses = array_filter([
         <div class="footer-grid">
             <section class="footer-brand">
                 <a class="footer-logo" href="/">
-                    <img src="/img/logo.png" alt="Ninja School Blue logo">
+                    <img src="/img/logo-2.png" alt="Ninja School Blue logo">
                     <strong>Ninja School Blue</strong>
                 </a>
                 <p>Game mobile huyền thoại với lối chơi độc đáo, hệ thống đẹp mắt và cộng đồng sôi động.</p>

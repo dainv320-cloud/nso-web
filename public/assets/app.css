@@ -22,7 +22,7 @@ body {
     margin: 0;
     background:
         linear-gradient(180deg, rgb(255 247 237 / 92%), rgb(255 255 255 / 96%)),
-        url("/img/ns2d-bg1.png") top center / 1600px auto fixed no-repeat,
+        url("/img/bg-d.png") top center / 1600px auto fixed no-repeat,
         #fff7ed;
     color: var(--text);
     font-family: Be Vietnam Pro, Arial, Roboto, Noto Sans, Liberation Sans, Helvetica Neue, sans-serif;
@@ -381,7 +381,7 @@ main {
     background:
         linear-gradient(90deg, rgb(255 247 237 / 72%) 0%, rgb(255 237 213 / 46%) 44%, rgb(249 115 22 / 10%) 100%),
         radial-gradient(circle at 76% 42%, rgb(255 176 32 / 14%), transparent 24rem),
-        url("/img/ns2d-bg1.png") center / cover no-repeat;
+        url("/img/bg.png") center / cover no-repeat;
     box-shadow: 0 34px 80px rgb(124 45 18 / 18%);
 }
 
@@ -426,6 +426,17 @@ main {
     border-radius: 0;
     border: 0;
     box-shadow: none;
+    filter: drop-shadow(0 18px 30px rgb(15 23 42 / 22%));
+}
+
+.hero-art {
+    display: grid;
+    align-items: center;
+    justify-items: center;
+}
+
+.hero-art img {
+    width: min(100%, 520px);
 }
 
 .lead {
