@@ -19,7 +19,7 @@ class Web2MWebhookController extends Controller
         if (!$this->hasValidBearerToken($request)) {
             return response()->json([
                 'status' => false,
-                'msg' => 'Access Token khong hop le.',
+                'msg' => 'Access Token khong hop le nhu cut.',
             ], 401);
         }
 
