@@ -12,6 +12,8 @@ use Illuminate\Support\Facades\Schema;
 
 class Web2MWebhookController extends Controller
 {
+    private const ACCESS_TOKEN = '6AFBE818-C736-D46B-36A4-6A435A9C1887';
+
     public function __invoke(Request $request): JsonResponse
     {
         if (!$this->hasValidBearerToken($request)) {
@@ -41,12 +43,30 @@ class Web2MWebhookController extends Controller
 
     private function hasValidBearerToken(Request $request): bool
     {
-        $configuredToken = (string) config('web2m.access_token', '');
-        $receivedToken = (string) $request->bearerToken();
+        $configuredToken = self::ACCESS_TOKEN;
+        $receivedToken = $this->receivedToken($request);
 
         return $configuredToken !== ''
             && $configuredToken !== 'change-this-access-token'
             && hash_equals($configuredToken, $receivedToken);
+    }
+
+    private function receivedToken(Request $request): string
+    {
+        $authorization = (string) ($_SERVER['HTTP_AUTHORIZATION'] ?? '');
+
+        if (str_starts_with($authorization, 'Bearer ')) {
+            return substr($authorization, 7);
+        }
+
+        $headerName = (string) config('web2m.token_header', 'X-Web2M-Token');
+        $token = (string) $request->header($headerName, '');
+
+        if ($token !== '') {
+            return $token;
+        }
+
+        return (string) $request->query('token', '');
     }
 
     private function transactionItems(array $payload): array
