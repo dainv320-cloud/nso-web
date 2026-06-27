@@ -16,10 +16,13 @@ class Web2MWebhookController extends Controller
 
     public function __invoke(Request $request): JsonResponse
     {
-        if (!$this->hasValidBearerToken($request)) {
+        $hasValidToken = $this->hasValidBearerToken($request);
+        $this->writePaymentLog($request, $hasValidToken ? 'authorized' : 'unauthorized');
+
+        if (!$hasValidToken) {
             return response()->json([
                 'status' => false,
-                'msg' => 'Access Token khong hop le nhu cut.',
+                'msg' => 'Access Token khong hop le.',
             ], 401);
         }
 
@@ -67,6 +70,39 @@ class Web2MWebhookController extends Controller
         }
 
         return (string) $request->query('token', '');
+    }
+
+    private function writePaymentLog(Request $request, string $status): void
+    {
+        $logDir = storage_path('logs');
+
+        if (!is_dir($logDir)) {
+            mkdir($logDir, 0755, true);
+        }
+
+        $entry = [
+            'time' => now()->toDateTimeString(),
+            'status' => $status,
+            'method' => $request->method(),
+            'url' => $request->fullUrl(),
+            'ip' => $request->ip(),
+            'expected_token' => self::ACCESS_TOKEN,
+            'received_token' => $this->receivedToken($request),
+            'headers' => $request->headers->all(),
+            'server_authorization' => [
+                'HTTP_AUTHORIZATION' => $_SERVER['HTTP_AUTHORIZATION'] ?? null,
+                'REDIRECT_HTTP_AUTHORIZATION' => $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? null,
+                'Authorization' => $_SERVER['Authorization'] ?? null,
+            ],
+            'payload' => $request->all(),
+            'raw_body' => $request->getContent(),
+        ];
+
+        file_put_contents(
+            $logDir . DIRECTORY_SEPARATOR . 'log-payment.log',
+            json_encode($entry, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT) . PHP_EOL . str_repeat('-', 120) . PHP_EOL,
+            FILE_APPEND | LOCK_EX,
+        );
     }
 
     private function transactionItems(array $payload): array
