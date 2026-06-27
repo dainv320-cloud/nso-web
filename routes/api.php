@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Auth\ForgotPasswordOtpController;
+use App\Http\Controllers\Web2MWebhookController;
 use App\Controllers\HealthController;
 use App\Controllers\SiteController;
 use App\Controllers\UsersController;
@@ -13,6 +14,7 @@ Route::get('/content', fn () => \App\Response::json((new SiteController())->cont
 Route::get('/users', fn () => (new UsersController())->index());
 Route::post('/users', fn () => (new UsersController())->store());
 Route::get('/users/{id}', fn (int $id) => (new UsersController())->show($id));
+Route::post('/webhook/web2m', Web2MWebhookController::class);
 
 Route::prefix('forgot-password')->group(function (): void {
     Route::post('/request-otp', [ForgotPasswordOtpController::class, 'requestOtp']);

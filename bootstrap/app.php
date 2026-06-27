@@ -21,6 +21,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'forgot-password',
             'forgot-password/verify-otp',
             'forgot-password/reset',
+            'api/webhook/web2m',
             'api/*',
             'webhook/callback',
             'admin/*',
