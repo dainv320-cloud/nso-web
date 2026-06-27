@@ -13,6 +13,10 @@ use Illuminate\Support\Facades\Schema;
 class Web2MWebhookController extends Controller
 {
     private const ACCESS_TOKEN = '6AFBE818-C736-D46B-36A4-6A435A9C1887';
+    private const ACCESS_TOKENS = [
+        self::ACCESS_TOKEN,
+        'bd89c64c4987d9814b9a37dcd885b91a5501d00a3d18be7ccb325354cace28c1',
+    ];
 
     public function __invoke(Request $request): JsonResponse
     {
@@ -46,12 +50,19 @@ class Web2MWebhookController extends Controller
 
     private function hasValidBearerToken(Request $request): bool
     {
-        $configuredToken = self::ACCESS_TOKEN;
         $receivedToken = $this->receivedToken($request);
 
-        return $configuredToken !== ''
-            && $configuredToken !== 'change-this-access-token'
-            && hash_equals($configuredToken, $receivedToken);
+        foreach (self::ACCESS_TOKENS as $configuredToken) {
+            if (
+                $configuredToken !== ''
+                && $configuredToken !== 'change-this-access-token'
+                && hash_equals($configuredToken, $receivedToken)
+            ) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function receivedToken(Request $request): string
@@ -86,7 +97,7 @@ class Web2MWebhookController extends Controller
             'method' => $request->method(),
             'url' => $request->fullUrl(),
             'ip' => $request->ip(),
-            'expected_token' => self::ACCESS_TOKEN,
+            'expected_tokens' => self::ACCESS_TOKENS,
             'received_token' => $this->receivedToken($request),
             'headers' => $request->headers->all(),
             'server_authorization' => [
