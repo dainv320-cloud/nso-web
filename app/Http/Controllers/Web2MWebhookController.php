@@ -51,6 +51,10 @@ class Web2MWebhookController extends Controller
 
     private function transactionItems(array $payload): array
     {
+        if (isset($payload['data']['ChiTietGiaoDich']) && is_array($payload['data']['ChiTietGiaoDich'])) {
+            return $payload['data']['ChiTietGiaoDich'];
+        }
+
         if (isset($payload['data']) && is_array($payload['data'])) {
             return $payload['data'];
         }
@@ -61,84 +65,61 @@ class Web2MWebhookController extends Controller
 
     private function handleTransaction(array $item, array $rawPayload): void
     {
-        $transactionId = $this->transactionId($item);
-        $amount = (float) ($item['amount'] ?? 0);
-        $coinAmount = (int) floor($amount);
-        $description = trim((string) ($item['description'] ?? ''));
-        $type = strtoupper((string) ($item['type'] ?? 'IN'));
-        $bank = isset($item['bank']) ? (string) $item['bank'] : null;
+        $normalizedItem = $this->normalizeTransactionItem($item);
+        $web2mTransactionId = $normalizedItem['transaction_id'];
+        $amount = $normalizedItem['amount'];
+        $description = $normalizedItem['description'];
+        $type = $normalizedItem['type'];
 
-        if ($transactionId === '' || $amount <= 0 || $description === '') {
-            $this->logFailedPayment($transactionId, $amount, $coinAmount, $description, $rawPayload, 'Du lieu giao dich khong hop le.');
+        if ($web2mTransactionId === '' || $amount <= 0 || $description === '') {
+            $this->logFailedWebhook($web2mTransactionId, $amount, $description, $rawPayload, 'Du lieu giao dich Web2M khong hop le.');
 
             return;
         }
 
         if ($type !== 'IN') {
-            $this->logFailedPayment($transactionId, $amount, $coinAmount, $description, $rawPayload, 'Bo qua giao dich khong phai tien vao.');
+            $this->logFailedWebhook($web2mTransactionId, $amount, $description, $rawPayload, 'Bo qua giao dich khong phai tien vao.');
 
             return;
         }
-
-        $processedPayment = Payment::query()
-            ->where('transaction_id', $transactionId)
-            ->where('status', 'success')
-            ->exists();
-
-        if ($processedPayment) {
-            return;
-        }
-
-        $userId = $this->parseUserId($description);
-
-        if (!$userId) {
-            $this->logFailedPayment($transactionId, $amount, $coinAmount, $description, $rawPayload, 'Khong tim thay ID_USER trong noi dung chuyen khoan.');
-
-            return;
-        }
-
-        $coinColumn = $this->coinBalanceColumn();
 
         try {
-            DB::transaction(function () use ($transactionId, $amount, $coinAmount, $description, $rawPayload, $item, $userId, $coinColumn, $bank, $type): void {
-                // Khoa user trong transaction de tranh cong coin sai khi Web2M gui trung hoac request den dong thoi.
-                $user = User::query()->whereKey($userId)->lockForUpdate()->first();
+            DB::transaction(function () use ($normalizedItem, $rawPayload, $web2mTransactionId, $amount, $description, $type): void {
+                $payment = $this->paymentFromDescription($description);
+
+                if (!$payment) {
+                    $this->logFailedWebhook($web2mTransactionId, $amount, $description, $rawPayload, 'Khong tim thay giao dich pending khop noi dung chuyen khoan.');
+
+                    return;
+                }
+
+                if ($this->paymentIsSuccess($payment)) {
+                    return;
+                }
+
+                if (!$this->paymentIsPending($payment)) {
+                    return;
+                }
+
+                $expectedAmount = (float) $payment->amount;
+
+                if (abs($expectedAmount - $amount) > 0.01) {
+                    $this->markPaymentFailed($payment, $normalizedItem, $rawPayload, 'So tien chuyen khoan khong khop. Expected: ' . $expectedAmount . ', received: ' . $amount);
+
+                    return;
+                }
+
+                $user = User::query()->whereKey((int) $payment->user_id)->lockForUpdate()->first();
 
                 if (!$user) {
-                    $this->logFailedPayment($transactionId, $amount, $coinAmount, $description, $rawPayload, 'Khong tim thay user hop le.');
+                    $this->markPaymentFailed($payment, $normalizedItem, $rawPayload, 'Khong tim thay user cua giao dich pending.');
 
                     return;
                 }
 
-                $existingPayment = Payment::query()
-                    ->where('transaction_id', $transactionId)
-                    ->lockForUpdate()
-                    ->first();
-
-                if ($existingPayment && $existingPayment->status === 'success') {
-                    return;
-                }
-
-                $user->forceFill([
-                    $coinColumn => ((int) $user->{$coinColumn}) + $coinAmount,
-                ])->save();
-
-                Payment::query()->updateOrCreate(
-                    ['transaction_id' => $transactionId],
-                    [
-                        'user_id' => $user->id,
-                        'bank' => $bank,
-                        'type' => $type,
-                        'amount' => $amount,
-                        'coin_amount' => $coinAmount,
-                        'status' => 'success',
-                        'description' => $description,
-                        'raw_payload' => [
-                            'web2m_item' => $item,
-                            'web2m_payload' => $rawPayload,
-                        ],
-                    ],
-                );
+                $coinAmount = $this->paymentCoinAmount($payment, $amount);
+                $this->creditUser($user, $amount, $coinAmount);
+                $this->markPaymentSuccess($payment, $normalizedItem, $rawPayload, $type);
             });
         } catch (QueryException $exception) {
             if (!$this->isDuplicateTransaction($exception)) {
@@ -147,51 +128,244 @@ class Web2MWebhookController extends Controller
         }
     }
 
-    private function transactionId(array $item): string
+    private function normalizeTransactionItem(array $item): array
+    {
+        $creditAmount = $item['SoTienGhiCo'] ?? null;
+        $debitAmount = $item['SoTienGhiNo'] ?? null;
+        $amount = $creditAmount ?? $item['amount'] ?? 0;
+        $description = $item['MoTa'] ?? $item['description'] ?? '';
+        $direction = strtoupper(trim((string) ($item['CD'] ?? '')));
+        $type = strtoupper(trim((string) ($item['type'] ?? '')));
+
+        if ($type === '') {
+            $type = ($direction === '-' || $debitAmount !== null) ? 'OUT' : 'IN';
+        }
+
+        return [
+            'transaction_id' => trim((string) ($item['SoThamChieu'] ?? $item['id'] ?? $item['transaction_id'] ?? $item['transactionID'] ?? '')),
+            'amount' => $this->moneyAmount($amount),
+            'description' => trim((string) $description),
+            'type' => $type,
+            'bank' => $item['bank'] ?? $item['NganHang'] ?? null,
+            'raw_item' => $item,
+        ];
+    }
+
+    private function moneyAmount(mixed $value): float
+    {
+        $normalized = preg_replace('/[^\d.\-]/', '', str_replace(',', '', (string) $value));
+
+        return (float) ($normalized === '' ? 0 : $normalized);
+    }
+
+    private function paymentFromDescription(string $description): ?Payment
+    {
+        $codes = $this->paymentCodesFromDescription($description);
+
+        if ($codes === []) {
+            return null;
+        }
+
+        $codeColumn = $this->paymentCodeColumn();
+
+        return Payment::query()
+            ->whereIn($codeColumn, $codes)
+            ->lockForUpdate()
+            ->orderByDesc('id')
+            ->first();
+    }
+
+    private function paymentCodesFromDescription(string $description): array
+    {
+        $normalized = strtoupper(preg_replace('/\s+/', '', $description) ?? '');
+
+        if (!preg_match_all('/[A-Z]{2,30}[0-9]{2,40}/', $normalized, $matches)) {
+            return [];
+        }
+
+        return array_values(array_unique($matches[0]));
+    }
+
+    private function creditUser(User $user, float $amount, int $coinAmount): void
+    {
+        $balanceColumn = $this->firstUserColumn(['balance', 'money']);
+        $totalDepositColumn = $this->firstUserColumn(['tongnap', 'totalmoney']);
+        $monthlyDepositColumn = $this->firstUserColumn(['tongNapThang', 'tongnapthang']);
+
+        $values = [
+            $balanceColumn => max(0, (int) $user->{$balanceColumn}) + $coinAmount,
+            $totalDepositColumn => max(0, (int) $user->{$totalDepositColumn}) + (int) $amount,
+            $monthlyDepositColumn => max(0, (int) $user->{$monthlyDepositColumn}) + (int) $amount,
+        ];
+
+        if (Schema::hasColumn('users', 'tongNapTuan')) {
+            $values['tongNapTuan'] = max(0, (int) $user->tongNapTuan) + (int) $amount;
+        }
+
+        $user->forceFill($values)->save();
+    }
+
+    private function markPaymentSuccess(Payment $payment, array $item, array $rawPayload, string $type): void
+    {
+        $values = [
+            'description' => trim((string) ($item['description'] ?? $item['MoTa'] ?? '')),
+        ];
+
+        if (Schema::hasColumn('payments', 'status')) {
+            $values['status'] = 'success';
+        }
+
+        if (Schema::hasColumn('payments', 'bank')) {
+            $values['bank'] = isset($item['bank']) ? (string) $item['bank'] : null;
+        }
+
+        if (Schema::hasColumn('payments', 'type')) {
+            $values['type'] = $this->paymentTypeValue($type);
+        }
+
+        if (Schema::hasColumn('payments', 'received')) {
+            $values['received'] = 1;
+        }
+
+        $this->appendPaymentLog($values, $item, $rawPayload, 'success');
+        $payment->forceFill($values)->save();
+    }
+
+    private function markPaymentFailed(Payment $payment, array $item, array $rawPayload, string $reason): void
+    {
+        $values = [
+            'description' => trim((string) ($item['description'] ?? $item['MoTa'] ?? '') . ' | ' . $reason),
+        ];
+
+        if (Schema::hasColumn('payments', 'status')) {
+            $values['status'] = 'failed';
+        }
+
+        if (Schema::hasColumn('payments', 'received')) {
+            $values['received'] = 0;
+        }
+
+        $this->appendPaymentLog($values, $item, $rawPayload, 'failed', $reason);
+        $payment->forceFill($values)->save();
+    }
+
+    private function logFailedWebhook(
+        string $web2mTransactionId,
+        float $amount,
+        string $description,
+        array $payload,
+        string $reason,
+    ): void {
+        $codeColumn = $this->paymentCodeColumn();
+        $transactionId = $web2mTransactionId !== ''
+            ? 'web2m-' . $web2mTransactionId
+            : 'web2m-invalid-' . sha1(json_encode($payload) . microtime(true));
+
+        $values = [
+            $codeColumn => $transactionId,
+            'amount' => max($amount, 0),
+            'description' => trim($description . ' | ' . $reason),
+        ];
+
+        if (Schema::hasColumn('payments', 'status')) {
+            $values['status'] = 'failed';
+        }
+
+        if (Schema::hasColumn('payments', 'received')) {
+            $values['received'] = 0;
+        }
+
+        if (Schema::hasColumn('payments', 'type')) {
+            $values['type'] = $this->paymentTypeValue('IN');
+        }
+
+        if (Schema::hasColumn('payments', 'coin_amount')) {
+            $values['coin_amount'] = 0;
+        }
+
+        if (Schema::hasColumn('payments', 'balance')) {
+            $values['balance'] = 0;
+        }
+
+        $this->appendPaymentLog($values, [], $payload, 'failed', $reason);
+
+        Payment::query()->updateOrCreate(
+            [$codeColumn => $transactionId],
+            $values,
+        );
+    }
+
+    private function appendPaymentLog(array &$values, array $item, array $rawPayload, string $status, ?string $reason = null): void
+    {
+        $log = [
+            'web2m_status' => $status,
+            'web2m_reason' => $reason,
+            'web2m_item' => $item,
+            'web2m_payload' => $rawPayload,
+        ];
+
+        if (Schema::hasColumn('payments', 'raw_payload')) {
+            $values['raw_payload'] = $log;
+        }
+
+        if (Schema::hasColumn('payments', 'extra')) {
+            $values['extra'] = json_encode($log, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        }
+    }
+
+    private function web2mTransactionId(array $item): string
     {
         // Web2M document: id la ma dinh danh duy nhat. transactionID la ma tu ngan hang.
         return trim((string) ($item['id'] ?? $item['transaction_id'] ?? $item['transactionID'] ?? ''));
     }
 
-    private function parseUserId(string $description): ?int
+    private function paymentIsSuccess(Payment $payment): bool
     {
-        // Chap nhan: "NAPCOIN 123", "NAPCOIN-123", "NAPCOIN: 123", "NAP123", "IB NAP123".
-        if (!preg_match('/\bNAP(?:COIN)?[\s\-:]*(\d+)\b/i', $description, $matches)) {
-            return null;
-        }
-
-        return (int) $matches[1];
+        return strtolower((string) ($payment->status ?? '')) === 'success'
+            || (int) ($payment->received ?? 0) === 1;
     }
 
-    private function coinBalanceColumn(): string
+    private function paymentIsPending(Payment $payment): bool
     {
-        // Schema hien tai dang co cot money. Neu sau nay them coin_balance, code se tu dung cot moi.
-        return Schema::hasColumn('users', 'coin_balance') ? 'coin_balance' : 'money';
-    }
-
-    private function logFailedPayment(
-        string $transactionId,
-        float $amount,
-        int $coinAmount,
-        string $description,
-        array $payload,
-        string $reason,
-    ): void {
-        if ($transactionId === '') {
-            $transactionId = 'web2m-invalid-' . sha1(json_encode($payload) . microtime(true));
+        if (Schema::hasColumn('payments', 'status')) {
+            return in_array(strtolower((string) $payment->status), ['pending', 'pedding'], true);
         }
 
-        Payment::query()->updateOrCreate(
-            ['transaction_id' => $transactionId],
-            [
-                'type' => 'IN',
-                'amount' => max($amount, 0),
-                'coin_amount' => max($coinAmount, 0),
-                'status' => 'failed',
-                'description' => trim($description . ' | ' . $reason),
-                'raw_payload' => $payload,
-            ],
-        );
+        return !Schema::hasColumn('payments', 'received') || (int) $payment->received === 0;
+    }
+
+    private function paymentTypeValue(string $type): string|int
+    {
+        return Schema::hasColumn('payments', 'transaction_id') ? $type : 1;
+    }
+
+    private function paymentCoinAmount(Payment $payment, float $amount): int
+    {
+        if (Schema::hasColumn('payments', 'coin_amount') && (int) $payment->coin_amount > 0) {
+            return (int) $payment->coin_amount;
+        }
+
+        if (Schema::hasColumn('payments', 'balance') && (int) $payment->balance > 0) {
+            return (int) $payment->balance;
+        }
+
+        return (int) floor($amount);
+    }
+
+    private function firstUserColumn(array $columns): string
+    {
+        foreach ($columns as $column) {
+            if (Schema::hasColumn('users', $column)) {
+                return $column;
+            }
+        }
+
+        return $columns[0];
+    }
+
+    private function paymentCodeColumn(): string
+    {
+        return Schema::hasColumn('payments', 'transaction_id') ? 'transaction_id' : 'trans_id';
     }
 
     private function isDuplicateTransaction(QueryException $exception): bool

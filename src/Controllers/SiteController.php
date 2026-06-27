@@ -22,6 +22,7 @@ final class SiteController
 
     private ContentRepository $content;
     private ?array $userTableSchema = null;
+    private ?array $paymentTableSchema = null;
 
     public function __construct(?ContentRepository $content = null)
     {
@@ -148,10 +149,10 @@ final class SiteController
                 ], 404);
             }
 
-            $transferContent = $this->buildTransferContent($bankAccount, $account);
             $effectiveRate = $this->effectiveBankRate($bankAccount);
             $activeCampaign = $this->activePromotionCampaign();
             $coinAmount = $this->coinAmount($amount, $effectiveRate);
+            $transferContent = $this->createPendingPayment($bankAccount, $account, $amount, $coinAmount);
             $qrImageUrl = $this->vietQrUrl($bankAccount, $amount, $transferContent);
         } catch (Throwable) {
             View::render('payment', [
@@ -249,23 +250,29 @@ final class SiteController
                 ], 404);
             }
 
+            $paymentCodeColumn = $this->paymentCodeColumn();
             $statement = Database::connection()->prepare(
-                'select id, amount, balance, trans_id, created_at
+                'select *
                  from payments
                  where user_id = :user_id
-                   and trans_id = :trans_id
+                   and ' . $paymentCodeColumn . ' = :payment_code
                  order by id desc
                  limit 1'
             );
             $statement->execute([
                 'user_id' => (int) $account['id'],
-                'trans_id' => $paymentCode,
+                'payment_code' => $paymentCode,
             ]);
             $payment = $statement->fetch();
+            $paid = $payment
+                && (
+                    strtolower((string) ($payment['status'] ?? '')) === 'success'
+                    || (int) ($payment['received'] ?? 0) === 1
+                );
 
             Response::json([
                 'status' => true,
-                'paid' => (bool) $payment,
+                'paid' => $paid,
                 'payment' => $payment ?: null,
             ]);
         } catch (Throwable) {
@@ -1060,6 +1067,113 @@ final class SiteController
         return $prefix . $userId . str_pad((string) $paymentRef, self::PAYMENT_REF_WIDTH, '0', STR_PAD_LEFT);
     }
 
+    private function createPendingPayment(array $bankAccount, array $account, int $amount, int $coinAmount): string
+    {
+        $connection = Database::connection();
+        $paymentCodeColumn = $this->paymentCodeColumn();
+
+        for ($attempt = 0; $attempt < 10; $attempt++) {
+            $paymentCode = $this->buildTransferContent($bankAccount, $account);
+            $exists = $connection->prepare('select id from payments where ' . $paymentCodeColumn . ' = :payment_code limit 1');
+            $exists->execute(['payment_code' => $paymentCode]);
+
+            if ($exists->fetch()) {
+                continue;
+            }
+
+            $columns = [
+                'user_id' => (int) ($account['id'] ?? 0),
+                'amount' => $amount,
+                'description' => 'Tao giao dich nap tien dang cho webhook: ' . $paymentCode,
+            ];
+
+            if ($this->paymentHasColumn('bank_account_id')) {
+                $columns['bank_account_id'] = (int) ($bankAccount['id'] ?? 0);
+            }
+
+            if ($this->paymentHasColumn('currency_id')) {
+                $columns['currency_id'] = 'VND';
+            }
+
+            if ($this->paymentHasColumn('bank')) {
+                $columns['bank'] = (string) ($bankAccount['bank_code'] ?? $bankAccount['bank_name'] ?? '');
+            }
+
+            if ($this->paymentHasColumn('type')) {
+                $columns['type'] = $this->paymentHasColumn('transaction_id') ? 'IN' : 1;
+            }
+
+            if ($this->paymentHasColumn('coin_amount')) {
+                $columns['coin_amount'] = $coinAmount;
+            }
+
+            if ($this->paymentHasColumn('balance')) {
+                $columns['balance'] = $coinAmount;
+            }
+
+            if ($this->paymentHasColumn('status')) {
+                $columns['status'] = 'pending';
+            }
+
+            if ($this->paymentHasColumn('received')) {
+                $columns['received'] = 0;
+            }
+
+            if ($this->paymentHasColumn('player_name')) {
+                $columns['player_name'] = (string) ($account['username'] ?? '');
+            }
+
+            $columns[$paymentCodeColumn] = $paymentCode;
+
+            $logPayload = [
+                'source' => 'payment_form',
+                'payment_code' => $paymentCode,
+                'bank_account_id' => (int) ($bankAccount['id'] ?? 0),
+                'coin_amount' => $coinAmount,
+            ];
+
+            if ($this->paymentHasColumn('raw_payload')) {
+                $columns['raw_payload'] = json_encode($logPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            }
+
+            if ($this->paymentHasColumn('extra')) {
+                $columns['extra'] = json_encode($logPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            }
+
+            $this->insertPaymentRow($columns);
+
+            return $paymentCode;
+        }
+
+        throw new \RuntimeException('Cannot create unique payment code.');
+    }
+
+    private function insertPaymentRow(array $columns): void
+    {
+        if ($this->paymentHasColumn('created_at')) {
+            $columns['created_at'] = new \DateTimeImmutable();
+        }
+
+        if ($this->paymentHasColumn('updated_at')) {
+            $columns['updated_at'] = new \DateTimeImmutable();
+        }
+
+        $names = array_keys($columns);
+        $quotedNames = array_map(fn (string $name): string => '`' . str_replace('`', '``', $name) . '`', $names);
+        $placeholders = array_map(fn (string $name): string => ':' . $name, $names);
+        $values = [];
+
+        foreach ($columns as $name => $value) {
+            $values[$name] = $value instanceof \DateTimeInterface
+                ? $value->format('Y-m-d H:i:s')
+                : $value;
+        }
+
+        Database::connection()
+            ->prepare('insert into payments (' . implode(', ', $quotedNames) . ') values (' . implode(', ', $placeholders) . ')')
+            ->execute($values);
+    }
+
     private function effectiveBankRate(array $bankAccount): float
     {
         $rate = (float) $bankAccount['bank_rate'];
@@ -1442,6 +1556,44 @@ final class SiteController
         }
 
         return $this->userTableSchema;
+    }
+
+    private function paymentTableSchema(): array
+    {
+        if ($this->paymentTableSchema !== null) {
+            return $this->paymentTableSchema;
+        }
+
+        try {
+            $rows = Database::connection()->query('show columns from payments')->fetchAll();
+            $schema = [];
+
+            foreach ($rows as $row) {
+                $field = strtolower((string) ($row['Field'] ?? ''));
+
+                if ($field !== '') {
+                    $schema[$field] = $row;
+                }
+            }
+
+            $this->paymentTableSchema = $schema;
+        } catch (Throwable) {
+            $this->paymentTableSchema = [];
+        }
+
+        return $this->paymentTableSchema;
+    }
+
+    private function paymentHasColumn(string $column): bool
+    {
+        $schema = $this->paymentTableSchema();
+
+        return isset($schema[strtolower($column)]);
+    }
+
+    private function paymentCodeColumn(): string
+    {
+        return $this->paymentHasColumn('transaction_id') ? 'transaction_id' : 'trans_id';
     }
 
     private function usesModernUserSchema(): bool

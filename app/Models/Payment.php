@@ -9,22 +9,30 @@ class Payment extends Model
     protected $fillable = [
         'user_id',
         'bank_account_id',
+        'currency_id',
         'transaction_id',
+        'trans_id',
         'bank',
         'type',
         'amount',
+        'balance',
         'coin_amount',
         'status',
         'description',
         'raw_payload',
+        'extra',
+        'player_name',
+        'received',
     ];
 
     protected function casts(): array
     {
         return [
             'amount' => 'decimal:2',
+            'balance' => 'integer',
             'coin_amount' => 'integer',
             'raw_payload' => 'array',
+            'received' => 'integer',
         ];
     }
 }
