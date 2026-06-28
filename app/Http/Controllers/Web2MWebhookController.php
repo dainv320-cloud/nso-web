@@ -9,6 +9,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Throwable;
 
 class Web2MWebhookController extends Controller
 {
@@ -30,15 +31,24 @@ class Web2MWebhookController extends Controller
             ], 401);
         }
 
-        $payload = $request->all();
-        $items = $this->transactionItems($payload);
+        try {
+            $payload = $request->all();
+            $items = $this->transactionItems($payload);
 
-        foreach ($items as $item) {
-            if (!is_array($item)) {
-                continue;
+            foreach ($items as $item) {
+                if (!is_array($item)) {
+                    continue;
+                }
+
+                $this->handleTransaction($item, $payload);
             }
+        } catch (Throwable $exception) {
+            $this->writePaymentLog($request, 'exception', $exception);
 
-            $this->handleTransaction($item, $payload);
+            return response()->json([
+                'status' => false,
+                'msg' => 'Cannot process webhook right now.',
+            ], 200);
         }
 
         // Web2M can response nay de xac nhan da nhan webhook va khong gui lai.
@@ -83,7 +93,7 @@ class Web2MWebhookController extends Controller
         return (string) $request->query('token', '');
     }
 
-    private function writePaymentLog(Request $request, string $status): void
+    private function writePaymentLog(Request $request, string $status, ?Throwable $exception = null): void
     {
         $logDir = storage_path('logs');
 
@@ -108,6 +118,16 @@ class Web2MWebhookController extends Controller
             'payload' => $request->all(),
             'raw_body' => $request->getContent(),
         ];
+
+        if ($exception) {
+            $entry['exception'] = [
+                'class' => $exception::class,
+                'message' => $exception->getMessage(),
+                'file' => $exception->getFile(),
+                'line' => $exception->getLine(),
+                'trace' => $exception->getTraceAsString(),
+            ];
+        }
 
         file_put_contents(
             $logDir . DIRECTORY_SEPARATOR . 'log-payment.log',
@@ -333,6 +353,14 @@ class Web2MWebhookController extends Controller
             'amount' => max($amount, 0),
             'description' => trim($description . ' | ' . $reason),
         ];
+
+        if (Schema::hasColumn('payments', 'currency_id')) {
+            $values['currency_id'] = 'VND';
+        }
+
+        if (Schema::hasColumn('payments', 'player_name')) {
+            $values['player_name'] = '';
+        }
 
         if (Schema::hasColumn('payments', 'status')) {
             $values['status'] = 'failed';
