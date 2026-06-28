@@ -12,7 +12,7 @@ $activeCampaign = $activeCampaign ?? null;
 
 <section class="page-head">
     <p class="eyebrow">ATM / VietQR</p>
-    <h1>Nạp tiền </h1>
+    <h1>Nạp tiền</h1>
     <p>Chọn mệnh giá, quét mã QR và chuyển khoản đúng nội dung hệ thống hiển thị.</p>
 </section>
 
@@ -44,45 +44,45 @@ $activeCampaign = $activeCampaign ?? null;
             data-payment-campaign-name="<?= e((string) ($activeCampaign['name'] ?? '')) ?>"
             data-payment-campaign-bonus="<?= e((string) ($activeCampaign['bonus_percent'] ?? 0)) ?>"
         >
+            <label>
+                Số tiền nạp
+                <input
+                    name="amount"
+                    type="text"
+                    min="1000"
+                    step="1000"
+                    inputmode="numeric"
+                    list="payment-amount-suggestions"
+                    data-money-input
+                    value="<?= e(number_format($selectedAmount, 0, ',', '.')) ?>"
+                    placeholder="Ví dụ: 100000"
+                    required
+                >
+                <datalist id="payment-amount-suggestions">
+                    <?php foreach ($amounts as $item): ?>
+                        <?php $value = (int) $item['amount']; ?>
+                        <option value="<?= number_format($value, 0, ',', '.') ?>"><?= number_format($value, 0, ',', '.') ?> VND</option>
+                    <?php endforeach; ?>
+                </datalist>
+                <small class="form-hint">Nhập số tiền là bội số của 1.000 VND.</small>
+            </label>
 
-        <label>
-            Số tiền nạp
-            <input
-                name="amount"
-                type="text"
-                min="1000"
-                step="1000"
-                inputmode="numeric"
-                list="payment-amount-suggestions"
-                data-money-input
-                value="<?= e(number_format($selectedAmount, 0, ',', '.')) ?>"
-                placeholder="Ví dụ: 100000"
-                required
-            >
-            <datalist id="payment-amount-suggestions">
-                <?php foreach ($amounts as $item): ?>
-                    <?php $value = (int) $item['amount']; ?>
-                    <option value="<?= number_format($value, 0, ',', '.') ?>"><?= number_format($value, 0, ',', '.') ?> VND</option>
-                <?php endforeach; ?>
-            </datalist>
-            <small class="form-hint">Nhập số tiền là bội của 1.000 VND.</small>
-        </label>
-        <label>
-            Coin nhan duoc
-            <input
-                type="text"
-                value="<?= e(number_format($coinAmount > 0 ? $coinAmount : (int) floor($selectedAmount * (float) ($effectiveRate ?? 1)), 0, ',', '.')) ?>"
-                data-payment-coin-output
-                readonly
-            >
-            <small class="form-hint" data-payment-rate-text>
-                <?php if ($activeCampaign): ?>
-                    Campaign <?= e((string) $activeCampaign['name']) ?> dang ap dung: <?= e((string) ($bankAccount['bank_rate'] ?? 1)) ?> x (1 + <?= e((string) $activeCampaign['bonus_percent']) ?>%) = <?= e((string) $effectiveRate) ?> coin / 1 VND.
-                <?php else: ?>
-                    Ty le hien tai: <?= e((string) $effectiveRate) ?> coin / 1 VND.
-                <?php endif; ?>
-            </small>
-        </label>
+            <label>
+                Coin nhận được
+                <input
+                    type="text"
+                    value="<?= e(number_format($coinAmount > 0 ? $coinAmount : (int) floor($selectedAmount * (float) ($effectiveRate ?? 1)), 0, ',', '.')) ?>"
+                    data-payment-coin-output
+                    readonly
+                >
+                <small class="form-hint" data-payment-rate-text>
+                    <?php if ($activeCampaign): ?>
+                        Khuyến mãi <?= e((string) $activeCampaign['name']) ?> đang áp dụng: <?= e((string) ($bankAccount['bank_rate'] ?? 1)) ?> x (1 + <?= e((string) $activeCampaign['bonus_percent']) ?>%) = <?= e((string) $effectiveRate) ?> coin / 1 VND.
+                    <?php else: ?>
+                        Tỷ lệ hiện tại: <?= e((string) $effectiveRate) ?> coin / 1 VND.
+                    <?php endif; ?>
+                </small>
+            </label>
         </div>
 
         <?php if ($bankAccount): ?>
@@ -112,15 +112,16 @@ $activeCampaign = $activeCampaign ?? null;
             </dl>
         <?php endif; ?>
 
-        <button class="btn primary" type="submit" <?= !$bankAccount ? 'disabled' : '' ?>>Tạo QR VietQR</button>
+        <button class="btn primary" type="submit" <?= !$bankAccount ? 'disabled' : '' ?>>Tạo mã QR VietQR</button>
     </form>
 
     <aside class="panel">
         <img class="panel-image" src="/img/ns2d-ninja.webp" alt="Ninja Mobile">
-        <h2>Lưu ý chuyển khoản</h2>
+        <h2>Lưu ý khi chuyển khoản</h2>
         <ul class="check-list">
-            <li>Chuyển đúng số tiền và đúng nội dung hiển thị.</li>
-            <li>Coin sẽ được cộng sau khi webhook ngân hàng xác nhận giao dịch.</li>
+            <li>Chuyển đúng số tiền và đúng nội dung hệ thống hiển thị.</li>
+            <li>Chuyển tiền là hoàn toàn tự nguyện.</li>
+            <li>Coin được cộng ngay sau khi chuyển tiền thành công.</li>
         </ul>
     </aside>
 </section>
@@ -137,7 +138,7 @@ $activeCampaign = $activeCampaign ?? null;
             <button class="payment-qr-close" type="button" data-payment-qr-close aria-label="Đóng">&times;</button>
             <header>
                 <h2 id="payment-qr-title">Quét mã QR VietQR</h2>
-                <p>Hệ thống sẽ cộng tiền sau khi webhook ngân hàng báo giao dịch vào.</p>
+                <p>Hệ thống sẽ cộng coin sau khi webhook ngân hàng xác nhận giao dịch.</p>
             </header>
 
             <div class="payment-qr-image">
@@ -182,10 +183,10 @@ $activeCampaign = $activeCampaign ?? null;
                 <strong>Quan trọng:</strong>
                 <ul>
                     <li>Nội dung chuyển khoản phải đúng chính xác: <b><?= e($paymentContent) ?></b></li>
-                    <li>Website không tạo order trước;</li>
+                    <li>Website đã tạo giao dịch chờ, vui lòng không đổi nội dung hoặc số tiền.</li>
                 </ul>
             </div>
-            <p class="form-hint" data-payment-status-text>Dang cho webhook xac nhan giao dich...</p>
+            <p class="form-hint" data-payment-status-text>Đang chờ webhook xác nhận giao dịch...</p>
         </section>
     </div>
     <script>
@@ -242,7 +243,7 @@ $activeCampaign = $activeCampaign ?? null;
 
                 var item = document.createElement('div');
                 item.className = 'ns-toast ' + (isError ? 'ns-toast-error' : 'ns-toast-success');
-                item.innerHTML = '<span class="ns-toast-icon" aria-hidden="true">' + (isError ? '!' : '&#10003;') + '</span><strong>' + message + '</strong><button type="button" class="ns-toast-close" aria-label="Dong">&times;</button><span class="ns-toast-progress" aria-hidden="true"></span>';
+                item.innerHTML = '<span class="ns-toast-icon" aria-hidden="true">' + (isError ? '!' : '&#10003;') + '</span><strong>' + message + '</strong><button type="button" class="ns-toast-close" aria-label="Đóng">&times;</button><span class="ns-toast-progress" aria-hidden="true"></span>';
                 stack.appendChild(item);
 
                 var closeButton = item.querySelector('.ns-toast-close');
@@ -279,7 +280,7 @@ $activeCampaign = $activeCampaign ?? null;
 
             function renderCountdown() {
                 if (statusText && !resolved) {
-                    statusText.textContent = 'Dang cho webhook xac nhan giao dich... Con ' + secondsLeft + 's';
+                    statusText.textContent = 'Đang chờ webhook xác nhận giao dịch... Còn ' + secondsLeft + 's';
                 }
             }
 
@@ -303,12 +304,12 @@ $activeCampaign = $activeCampaign ?? null;
                             var payload = JSON.parse(xhr.responseText || '{}');
 
                             if (payload.paid) {
-                                finish('Nap tien thanh cong, coin da duoc cong vao tai khoan.', false);
+                                finish('Nạp tiền thành công, coin đã được cộng vào tài khoản.', false);
                                 return;
                             }
 
                             if (payload.failed) {
-                                finish('Giao dich that bai, vui long kiem tra lai noi dung va so tien.', true);
+                                finish('Giao dịch thất bại, vui lòng kiểm tra lại nội dung và số tiền.', true);
                                 return;
                             }
                         } catch (error) {
@@ -329,7 +330,7 @@ $activeCampaign = $activeCampaign ?? null;
                 secondsLeft -= 1;
 
                 if (secondsLeft <= 0) {
-                    finish('Giao dich khong thanh cong hoac chua nhan duoc webhook.', true);
+                    finish('Giao dịch không thành công hoặc chưa nhận được webhook.', true);
                     return;
                 }
 

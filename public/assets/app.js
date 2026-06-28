@@ -151,11 +151,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (campaignName) {
-            rateText.textContent = 'Campaign ' + campaignName + ': ' + baseRate + ' x (1 + ' + campaignBonus + '%) = ' + effectiveRate + ' coin / 1 VND.';
+            rateText.textContent = 'Khuyến mãi ' + campaignName + ': ' + baseRate + ' x (1 + ' + campaignBonus + '%) = ' + effectiveRate + ' coin / 1 VND.';
             return;
         }
 
-        rateText.textContent = 'Ty le hien tai: ' + effectiveRate + ' coin / 1 VND.';
+        rateText.textContent = 'Tỷ lệ hiện tại: ' + effectiveRate + ' coin / 1 VND.';
     };
 
     amountInput.addEventListener('input', updateCoinPreview);
@@ -286,6 +286,10 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
     }
 
+    if (backdrop.dataset.paymentWatcherStarted === '1') {
+        return;
+    }
+
     const statusText = backdrop.querySelector('[data-payment-status-text]');
     const statusUrl = backdrop.dataset.paymentStatusUrl || '';
     backdrop.dataset.paymentWatcherStarted = '1';
@@ -324,7 +328,7 @@ document.addEventListener('DOMContentLoaded', () => {
         toast.innerHTML = ''
             + '<span class="ns-toast-icon" aria-hidden="true">' + (isError ? '!' : '&#10003;') + '</span>'
             + '<strong>' + message + '</strong>'
-            + '<button type="button" class="ns-toast-close" aria-label="Dong">&times;</button>'
+            + '<button type="button" class="ns-toast-close" aria-label="Đóng">&times;</button>'
             + '<span class="ns-toast-progress" aria-hidden="true"></span>';
 
         const close = () => {
@@ -361,7 +365,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        statusText.textContent = 'Dang cho webhook xac nhan giao dich... Con ' + secondsLeft + 's';
+        statusText.textContent = 'Đang chờ webhook xác nhận giao dịch... Còn ' + secondsLeft + 's';
     };
 
     const startCountdown = () => {
@@ -371,7 +375,7 @@ document.addEventListener('DOMContentLoaded', () => {
             secondsLeft -= 1;
 
             if (secondsLeft <= 0) {
-                finishPayment('Giao dich khong thanh cong hoac chua nhan duoc webhook.', true);
+                finishPayment('Giao dịch không thành công hoặc chưa nhận được webhook.', true);
                 return;
             }
 
@@ -401,19 +405,19 @@ document.addEventListener('DOMContentLoaded', () => {
             const payload = await response.json();
 
             if (payload && payload.paid) {
-                finishPayment('Nap tien thanh cong, coin da duoc cong vao tai khoan.');
+                finishPayment('Nạp tiền thành công, coin đã được cộng vào tài khoản.');
                 return;
             }
 
             if (payload && payload.failed) {
-                finishPayment('Giao dich that bai, vui long kiem tra lai noi dung va so tien.', true);
+                finishPayment('Giao dịch thất bại, vui lòng kiểm tra lại nội dung và số tiền.', true);
                 return;
             }
 
             renderCountdown();
         } catch (error) {
             if (statusText) {
-                statusText.textContent = 'Dang kiem tra giao dich, vui long cho trong giay lat... Con ' + secondsLeft + 's';
+                statusText.textContent = 'Đang kiểm tra giao dịch, vui lòng chờ trong giây lát... Còn ' + secondsLeft + 's';
             }
         }
 
