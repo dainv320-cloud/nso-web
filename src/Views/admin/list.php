@@ -30,6 +30,12 @@ ob_start();
                 <form class="admin-search" method="get" action="<?= e($searchUrl) ?>">
                     <input type="text" name="q" value="<?= e($searchValue) ?>" placeholder="<?= e($searchPlaceholder) ?>">
                     <?php foreach ($filters as $filter): ?>
+                        <?php if (($filter['type'] ?? '') === 'date'): ?>
+                            <label>
+                                <?= e((string) ($filter['label'] ?? 'Ngay')) ?>
+                                <input type="date" name="<?= e((string) ($filter['name'] ?? '')) ?>" value="<?= e((string) ($filter['value'] ?? '')) ?>">
+                            </label>
+                        <?php else: ?>
                         <select name="<?= e((string) ($filter['name'] ?? '')) ?>">
                             <option value=""><?= e((string) (($filter['label'] ?? 'Bộ lọc') . ': tất cả')) ?></option>
                             <?php foreach (($filter['options'] ?? []) as $option): ?>
@@ -40,6 +46,7 @@ ob_start();
                                 <option value="<?= e($optionValue) ?>" <?= (string) ($filter['value'] ?? '') === $optionValue ? 'selected' : '' ?>><?= e($optionLabel) ?></option>
                             <?php endforeach; ?>
                         </select>
+                        <?php endif; ?>
                     <?php endforeach; ?>
                     <button class="btn secondary" type="submit">Tìm</button>
                     <?php

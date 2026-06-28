@@ -269,10 +269,14 @@ final class SiteController
                     strtolower((string) ($payment['status'] ?? '')) === 'success'
                     || (int) ($payment['received'] ?? 0) === 1
                 );
+            $failed = $payment
+                && strtolower((string) ($payment['status'] ?? '')) === 'failed';
 
             Response::json([
                 'status' => true,
                 'paid' => $paid,
+                'failed' => $failed,
+                'payment_status' => $payment['status'] ?? ($paid ? 'success' : 'pending'),
                 'payment' => $payment ?: null,
             ]);
         } catch (Throwable) {

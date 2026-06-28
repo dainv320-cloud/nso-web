@@ -272,7 +272,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const statusText = backdrop.querySelector('[data-payment-status-text]');
     const statusUrl = backdrop.dataset.paymentStatusUrl || '';
     let pollingTimer = null;
+    let countdownTimer = null;
     let isResolved = false;
+    let secondsLeft = 60;
 
     const closeQr = () => {
         backdrop.classList.remove('is-open');
@@ -281,6 +283,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (pollingTimer) {
             window.clearTimeout(pollingTimer);
             pollingTimer = null;
+        }
+
+        if (countdownTimer) {
+            window.clearInterval(countdownTimer);
+            countdownTimer = null;
         }
     };
 
@@ -313,6 +320,44 @@ document.addEventListener('DOMContentLoaded', () => {
         window.setTimeout(close, 4000);
     };
 
+    const finishPayment = (message, isError = false) => {
+        if (isResolved) {
+            return;
+        }
+
+        isResolved = true;
+
+        if (statusText) {
+            statusText.textContent = message;
+        }
+
+        closeQr();
+        showToast(message, isError);
+    };
+
+    const renderCountdown = () => {
+        if (!statusText || isResolved) {
+            return;
+        }
+
+        statusText.textContent = `Dang cho webhook xac nhan giao dich... Con ${secondsLeft}s`;
+    };
+
+    const startCountdown = () => {
+        renderCountdown();
+
+        countdownTimer = window.setInterval(() => {
+            secondsLeft -= 1;
+
+            if (secondsLeft <= 0) {
+                finishPayment('Giao dich khong thanh cong hoac chua nhan duoc webhook.', true);
+                return;
+            }
+
+            renderCountdown();
+        }, 1000);
+    };
+
     const pollPaymentStatus = async () => {
         if (!statusUrl || isResolved || !backdrop.classList.contains('is-open')) {
             return;
@@ -335,27 +380,25 @@ document.addEventListener('DOMContentLoaded', () => {
             const payload = await response.json();
 
             if (payload?.paid) {
-                isResolved = true;
-
-                if (statusText) {
-                    statusText.textContent = 'Giao dich da duoc xac nhan.';
-                }
-
-                closeQr();
-                showToast('Nap tien thanh cong, coin da duoc cong vao tai khoan.');
+                finishPayment('Nap tien thanh cong, coin da duoc cong vao tai khoan.');
                 return;
             }
 
-            if (statusText) {
-                statusText.textContent = 'Dang cho webhook xac nhan giao dich...';
+            if (payload?.failed) {
+                finishPayment('Giao dich that bai, vui long kiem tra lai noi dung va so tien.', true);
+                return;
             }
+
+            renderCountdown();
         } catch (error) {
             if (statusText) {
-                statusText.textContent = 'Dang kiem tra giao dich, vui long cho trong giay lat...';
+                statusText.textContent = `Dang kiem tra giao dich, vui long cho trong giay lat... Con ${secondsLeft}s`;
             }
         }
 
-        pollingTimer = window.setTimeout(pollPaymentStatus, 5000);
+        if (!isResolved) {
+            pollingTimer = window.setTimeout(pollPaymentStatus, 3000);
+        }
     };
 
     document.querySelectorAll('[data-payment-qr-close]').forEach((button) => {
@@ -395,6 +438,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
+    startCountdown();
     pollPaymentStatus();
 });
 

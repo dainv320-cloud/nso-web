@@ -559,12 +559,45 @@ final class AdminController
     {
         $admin = $this->requireAdmin();
         $paymentEnabled = $this->paymentEnabled();
+        $search = trim((string) ($_GET['q'] ?? ''));
+        $dateFrom = trim((string) ($_GET['date_from'] ?? ''));
+        $dateTo = trim((string) ($_GET['date_to'] ?? ''));
+        $conditions = [];
+        $params = [];
+        $query = [];
+
+        if ($search !== '') {
+            $conditions[] = '(lower(coalesce(u.username, \'\')) like :search
+                or lower(coalesce(u.name, \'\')) like :search)';
+            $params['search'] = '%' . strtolower($search) . '%';
+            $query['q'] = $search;
+        }
+
+        if ($dateFrom !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateFrom)) {
+            $conditions[] = 'p.created_at >= :date_from';
+            $params['date_from'] = $dateFrom . ' 00:00:00';
+            $query['date_from'] = $dateFrom;
+        }
+
+        if ($dateTo !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateTo)) {
+            $conditions[] = 'p.created_at <= :date_to';
+            $params['date_to'] = $dateTo . ' 23:59:59';
+            $query['date_to'] = $dateTo;
+        }
+
+        $whereSql = $conditions === [] ? '' : ' where ' . implode(' and ', $conditions);
         $listing = $this->paginateRows(
-            'select count(*) from payments p',
+            'select count(*)
+             from payments p
+             left join users u on u.id = p.user_id'
+                . $whereSql,
             'select p.*, u.username
              from payments p
              left join users u on u.id = p.user_id
-             order by p.created_at desc, p.id desc'
+             ' . $whereSql . '
+             order by p.created_at desc, p.id desc',
+            $params,
+            $query
         );
 
         View::render('admin/list', [
@@ -577,6 +610,13 @@ final class AdminController
                 : "Ch\u{1EE9}c n\u{0103}ng n\u{1EA1}p ti\u{1EC1}n \u{0111}ang t\u{1EAF}t.",
             'paymentEnabled' => $paymentEnabled,
             'paymentToggleUrl' => '/admin/payments/toggle',
+            'searchUrl' => '/admin/payments',
+            'searchValue' => $search,
+            'searchPlaceholder' => 'Tim theo username hoac ten account',
+            'filters' => [
+                ['name' => 'date_from', 'label' => 'Tu ngay', 'type' => 'date', 'value' => $dateFrom],
+                ['name' => 'date_to', 'label' => 'Den ngay', 'type' => 'date', 'value' => $dateTo],
+            ],
             'rows' => $listing['rows'],
             'pagination' => $listing['pagination'],
             'columns' => [
@@ -585,6 +625,7 @@ final class AdminController
                 ['key' => 'username', 'label' => 'User'],
                 ['key' => 'currency_id', 'label' => 'Currency'],
                 ['key' => 'type', 'label' => 'Type'],
+                ['key' => 'status', 'label' => 'Status'],
                 ['key' => 'amount', 'label' => 'Amount', 'format' => 'money'],
                 ['key' => 'balance', 'label' => 'Balance', 'format' => 'money'],
                 ['key' => 'created_at', 'label' => 'Created', 'format' => 'datetime'],
