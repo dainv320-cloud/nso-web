@@ -53,7 +53,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (minuteEl) minuteEl.textContent = formatNumber(minutes);
         if (secondEl) secondEl.textContent = formatNumber(seconds);
         if (inlineEl) {
-            inlineEl.textContent = `${days} ngày ${formatNumber(hours)}:${formatNumber(minutes)}:${formatNumber(seconds)}`;
+            inlineEl.textContent = days + ' ngay ' + formatNumber(hours) + ':' + formatNumber(minutes) + ':' + formatNumber(seconds);
         }
     };
 
@@ -151,11 +151,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (campaignName) {
-            rateText.textContent = `Campaign ${campaignName}: ${baseRate} x (1 + ${campaignBonus}%) = ${effectiveRate} coin / 1 VND.`;
+            rateText.textContent = 'Campaign ' + campaignName + ': ' + baseRate + ' x (1 + ' + campaignBonus + '%) = ' + effectiveRate + ' coin / 1 VND.';
             return;
         }
 
-        rateText.textContent = `Ty le hien tai: ${effectiveRate} coin / 1 VND.`;
+        rateText.textContent = 'Ty le hien tai: ' + effectiveRate + ' coin / 1 VND.';
     };
 
     amountInput.addEventListener('input', updateCoinPreview);
@@ -166,14 +166,15 @@ document.addEventListener('DOMContentLoaded', () => {
 document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('[data-toggle-password]').forEach((button) => {
         button.addEventListener('click', () => {
-            const input = button.closest('.input-wrap')?.querySelector('input');
+            const wrap = button.closest('.input-wrap');
+            const input = wrap ? wrap.querySelector('input') : null;
 
             if (!input) {
                 return;
             }
 
             input.type = input.type === 'password' ? 'text' : 'password';
-            button.setAttribute('aria-label', input.type === 'password' ? 'Hiện mật khẩu' : 'Ẩn mật khẩu');
+            button.setAttribute('aria-label', input.type === 'password' ? 'Hien mat khau' : 'An mat khau');
         });
     });
 });
@@ -197,9 +198,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const shouldValidate = confirmPassword.value.length > 0;
         const isMatch = password.value === confirmPassword.value;
 
-        confirmPassword.closest('.input-wrap')?.classList.toggle('has-error', shouldValidate && !isMatch);
-        error.textContent = shouldValidate && !isMatch ? 'Mật khẩu nhập lại không trùng.' : '';
-        confirmPassword.setCustomValidity(shouldValidate && !isMatch ? 'Mật khẩu nhập lại không trùng.' : '');
+        const confirmWrap = confirmPassword.closest('.input-wrap');
+
+        if (confirmWrap) {
+            confirmWrap.classList.toggle('has-error', shouldValidate && !isMatch);
+        }
+        error.textContent = shouldValidate && !isMatch ? 'Mat khau nhap lai khong trung.' : '';
+        confirmPassword.setCustomValidity(shouldValidate && !isMatch ? 'Mat khau nhap lai khong trung.' : '');
 
         return !shouldValidate || isMatch;
     };
@@ -221,7 +226,11 @@ document.addEventListener('DOMContentLoaded', () => {
             setTimeout(() => toast.remove(), 180);
         };
 
-        toast.querySelector('[data-ns-toast-close]')?.addEventListener('click', close);
+        const closeButton = toast.querySelector('[data-ns-toast-close]');
+
+        if (closeButton) {
+            closeButton.addEventListener('click', close);
+        }
         setTimeout(close, 3000);
     });
 });
@@ -236,7 +245,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const closeAll = () => {
         menus.forEach((menu) => {
             menu.classList.remove('is-open');
-            menu.querySelector('[data-account-toggle]')?.setAttribute('aria-expanded', 'false');
+            const toggle = menu.querySelector('[data-account-toggle]');
+
+            if (toggle) {
+                toggle.setAttribute('aria-expanded', 'false');
+            }
         });
     };
 
@@ -245,7 +258,11 @@ document.addEventListener('DOMContentLoaded', () => {
     menus.forEach((menu) => {
         const toggle = menu.querySelector('[data-account-toggle]');
 
-        toggle?.addEventListener('click', (event) => {
+        if (!toggle) {
+            return;
+        }
+
+        toggle.addEventListener('click', (event) => {
             event.stopPropagation();
             const willOpen = !menu.classList.contains('is-open');
             closeAll();
@@ -271,6 +288,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const statusText = backdrop.querySelector('[data-payment-status-text]');
     const statusUrl = backdrop.dataset.paymentStatusUrl || '';
+    backdrop.dataset.paymentWatcherStarted = '1';
     let pollingTimer = null;
     let countdownTimer = null;
     let isResolved = false;
@@ -302,20 +320,23 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const toast = document.createElement('div');
-        toast.className = `ns-toast ${isError ? 'ns-toast-error' : 'ns-toast-success'}`;
-        toast.innerHTML = `
-            <span class="ns-toast-icon" aria-hidden="true">${isError ? '!' : '&#10003;'}</span>
-            <strong>${message}</strong>
-            <button type="button" class="ns-toast-close" aria-label="Đóng">&times;</button>
-            <span class="ns-toast-progress" aria-hidden="true"></span>
-        `;
+        toast.className = 'ns-toast ' + (isError ? 'ns-toast-error' : 'ns-toast-success');
+        toast.innerHTML = ''
+            + '<span class="ns-toast-icon" aria-hidden="true">' + (isError ? '!' : '&#10003;') + '</span>'
+            + '<strong>' + message + '</strong>'
+            + '<button type="button" class="ns-toast-close" aria-label="Dong">&times;</button>'
+            + '<span class="ns-toast-progress" aria-hidden="true"></span>';
 
         const close = () => {
             toast.classList.add('is-closing');
             window.setTimeout(() => toast.remove(), 180);
         };
 
-        toast.querySelector('.ns-toast-close')?.addEventListener('click', close);
+        const closeButton = toast.querySelector('.ns-toast-close');
+
+        if (closeButton) {
+            closeButton.addEventListener('click', close);
+        }
         stack.appendChild(toast);
         window.setTimeout(close, 4000);
     };
@@ -340,7 +361,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        statusText.textContent = `Dang cho webhook xac nhan giao dich... Con ${secondsLeft}s`;
+        statusText.textContent = 'Dang cho webhook xac nhan giao dich... Con ' + secondsLeft + 's';
     };
 
     const startCountdown = () => {
@@ -374,17 +395,17 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
+                throw new Error('HTTP ' + response.status);
             }
 
             const payload = await response.json();
 
-            if (payload?.paid) {
+            if (payload && payload.paid) {
                 finishPayment('Nap tien thanh cong, coin da duoc cong vao tai khoan.');
                 return;
             }
 
-            if (payload?.failed) {
+            if (payload && payload.failed) {
                 finishPayment('Giao dich that bai, vui long kiem tra lai noi dung va so tien.', true);
                 return;
             }
@@ -392,7 +413,7 @@ document.addEventListener('DOMContentLoaded', () => {
             renderCountdown();
         } catch (error) {
             if (statusText) {
-                statusText.textContent = `Dang kiem tra giao dich, vui long cho trong giay lat... Con ${secondsLeft}s`;
+                statusText.textContent = 'Dang kiem tra giao dich, vui long cho trong giay lat... Con ' + secondsLeft + 's';
             }
         }
 
@@ -563,3 +584,4 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
 });
+

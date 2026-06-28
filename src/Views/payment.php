@@ -188,4 +188,156 @@ $activeCampaign = $activeCampaign ?? null;
             <p class="form-hint" data-payment-status-text>Dang cho webhook xac nhan giao dich...</p>
         </section>
     </div>
+    <script>
+    (function () {
+        function ready(fn) {
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', fn);
+                return;
+            }
+
+            fn();
+        }
+
+        ready(function () {
+            var backdrop = document.querySelector('[data-payment-qr-backdrop]');
+
+            if (!backdrop || backdrop.getAttribute('data-payment-watcher-started') === '1') {
+                return;
+            }
+
+            backdrop.setAttribute('data-payment-watcher-started', '1');
+
+            var statusText = backdrop.querySelector('[data-payment-status-text]');
+            var statusUrl = backdrop.getAttribute('data-payment-status-url') || '';
+            var secondsLeft = 60;
+            var resolved = false;
+            var pollTimer = null;
+            var countdownTimer = null;
+
+            function closeQr() {
+                backdrop.classList.remove('is-open');
+                backdrop.setAttribute('aria-hidden', 'true');
+
+                if (pollTimer) {
+                    window.clearTimeout(pollTimer);
+                    pollTimer = null;
+                }
+
+                if (countdownTimer) {
+                    window.clearInterval(countdownTimer);
+                    countdownTimer = null;
+                }
+            }
+
+            function toast(message, isError) {
+                var stack = document.querySelector('.ns-toast-stack');
+
+                if (!stack) {
+                    stack = document.createElement('div');
+                    stack.className = 'ns-toast-stack';
+                    stack.setAttribute('aria-live', 'polite');
+                    document.body.appendChild(stack);
+                }
+
+                var item = document.createElement('div');
+                item.className = 'ns-toast ' + (isError ? 'ns-toast-error' : 'ns-toast-success');
+                item.innerHTML = '<span class="ns-toast-icon" aria-hidden="true">' + (isError ? '!' : '&#10003;') + '</span><strong>' + message + '</strong><button type="button" class="ns-toast-close" aria-label="Dong">&times;</button><span class="ns-toast-progress" aria-hidden="true"></span>';
+                stack.appendChild(item);
+
+                var closeButton = item.querySelector('.ns-toast-close');
+                var close = function () {
+                    item.classList.add('is-closing');
+                    window.setTimeout(function () {
+                        if (item.parentNode) {
+                            item.parentNode.removeChild(item);
+                        }
+                    }, 180);
+                };
+
+                if (closeButton) {
+                    closeButton.addEventListener('click', close);
+                }
+
+                window.setTimeout(close, 4000);
+            }
+
+            function finish(message, isError) {
+                if (resolved) {
+                    return;
+                }
+
+                resolved = true;
+
+                if (statusText) {
+                    statusText.textContent = message;
+                }
+
+                closeQr();
+                toast(message, isError);
+            }
+
+            function renderCountdown() {
+                if (statusText && !resolved) {
+                    statusText.textContent = 'Dang cho webhook xac nhan giao dich... Con ' + secondsLeft + 's';
+                }
+            }
+
+            function poll() {
+                if (!statusUrl || resolved || !backdrop.classList.contains('is-open')) {
+                    return;
+                }
+
+                var xhr = new XMLHttpRequest();
+                xhr.open('GET', statusUrl, true);
+                xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+                xhr.setRequestHeader('Accept', 'application/json');
+
+                xhr.onreadystatechange = function () {
+                    if (xhr.readyState !== 4 || resolved) {
+                        return;
+                    }
+
+                    if (xhr.status >= 200 && xhr.status < 300) {
+                        try {
+                            var payload = JSON.parse(xhr.responseText || '{}');
+
+                            if (payload.paid) {
+                                finish('Nap tien thanh cong, coin da duoc cong vao tai khoan.', false);
+                                return;
+                            }
+
+                            if (payload.failed) {
+                                finish('Giao dich that bai, vui long kiem tra lai noi dung va so tien.', true);
+                                return;
+                            }
+                        } catch (error) {
+                            // Continue polling.
+                        }
+                    }
+
+                    if (!resolved) {
+                        pollTimer = window.setTimeout(poll, 3000);
+                    }
+                };
+
+                xhr.send();
+            }
+
+            renderCountdown();
+            countdownTimer = window.setInterval(function () {
+                secondsLeft -= 1;
+
+                if (secondsLeft <= 0) {
+                    finish('Giao dich khong thanh cong hoac chua nhan duoc webhook.', true);
+                    return;
+                }
+
+                renderCountdown();
+            }, 1000);
+
+            poll();
+        });
+    }());
+    </script>
 <?php endif; ?>
