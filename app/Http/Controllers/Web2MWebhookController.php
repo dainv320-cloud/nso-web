@@ -295,7 +295,7 @@ class Web2MWebhookController extends Controller
     private function markPaymentSuccess(Payment $payment, array $item, array $rawPayload, string $type): void
     {
         $values = [
-            'description' => trim((string) ($item['description'] ?? $item['MoTa'] ?? '')),
+            'description' => $this->paymentDescription((string) ($item['description'] ?? $item['MoTa'] ?? '')),
         ];
 
         if (Schema::hasColumn('payments', 'status')) {
@@ -321,7 +321,7 @@ class Web2MWebhookController extends Controller
     private function markPaymentFailed(Payment $payment, array $item, array $rawPayload, string $reason): void
     {
         $values = [
-            'description' => trim((string) ($item['description'] ?? $item['MoTa'] ?? '') . ' | ' . $reason),
+            'description' => $this->paymentDescription((string) ($item['description'] ?? $item['MoTa'] ?? '') . ' | ' . $reason),
         ];
 
         if (Schema::hasColumn('payments', 'status')) {
@@ -351,7 +351,7 @@ class Web2MWebhookController extends Controller
         $values = [
             $codeColumn => $transactionId,
             'amount' => max($amount, 0),
-            'description' => trim($description . ' | ' . $reason),
+            'description' => $this->paymentDescription($description . ' | ' . $reason),
         ];
 
         if (Schema::hasColumn('payments', 'currency_id')) {
@@ -388,6 +388,13 @@ class Web2MWebhookController extends Controller
             [$codeColumn => $transactionId],
             $values,
         );
+    }
+
+    private function paymentDescription(string $description): string
+    {
+        $description = trim(preg_replace('/\s+/', ' ', $description) ?? '');
+
+        return substr($description, 0, 100);
     }
 
     private function appendPaymentLog(array &$values, array $item, array $rawPayload, string $status, ?string $reason = null): void
