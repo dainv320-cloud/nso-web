@@ -25,7 +25,8 @@ alter table posts alter column status type varchar(50);
 
 create table if not exists downloads (
     id bigserial primary key,
-    platform varchar(60) not null unique,
+    platform varchar(60) not null,
+    file_name varchar(255),
     version varchar(40) not null,
     file_size varchar(40) not null,
     download_url varchar(500) not null,
@@ -36,6 +37,7 @@ create table if not exists downloads (
 );
 
 alter table downloads add column if not exists updated_at timestamptz not null default now();
+alter table downloads add column if not exists file_name varchar(255);
 
 create table if not exists bank_accounts (
     id bigserial primary key,

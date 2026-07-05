@@ -43,7 +43,7 @@ foreach ($downloadPlatforms as $platform) {
             $meta = $platformMeta[$platformKey] ?? $platformMeta['java'];
             $versions = is_array($platform['versions'] ?? null) ? $platform['versions'] : [];
             ?>
-            <details class="download-platform" open>
+            <details class="download-platform">
                 <summary>
                     <span class="download-platform-icon <?= e($meta['iconClass']) ?>">
                         <svg viewBox="0 0 24 24" aria-hidden="true"><?= $meta['svg'] ?></svg>
@@ -94,3 +94,18 @@ foreach ($downloadPlatforms as $platform) {
         <a class="btn secondary" href="/huong-dan">Xem hướng dẫn cài đặt</a>
     </div>
 </section>
+<script>
+    document.querySelectorAll('.download-platform').forEach((platform) => {
+        platform.addEventListener('toggle', () => {
+            if (!platform.open) {
+                return;
+            }
+
+            document.querySelectorAll('.download-platform').forEach((otherPlatform) => {
+                if (otherPlatform !== platform) {
+                    otherPlatform.open = false;
+                }
+            });
+        });
+    });
+</script>

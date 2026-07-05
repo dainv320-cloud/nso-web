@@ -926,6 +926,7 @@ final class AdminController
             'columns' => [
                 ['key' => 'id', 'label' => 'ID'],
                 ['key' => 'platform', 'label' => 'Platform'],
+                ['key' => 'file_name', 'label' => 'File name'],
                 ['key' => 'version', 'label' => 'Version'],
                 ['key' => 'file_size', 'label' => 'Size'],
                 ['key' => 'is_active', 'label' => 'Active', 'format' => 'bool'],
@@ -949,11 +950,13 @@ final class AdminController
             'admin' => $admin,
             'section' => 'downloads',
             'heading' => $id ? "S\u{1EED}a download" : "Th\u{00EA}m download",
+            'description' => 'Moi dong la 1 ban tai xuong. Co the tao nhieu dong cung platform nhu java, android...',
             'backUrl' => '/admin/downloads',
             'actionUrl' => '/admin/downloads/save',
             'row' => $row ?? ['is_active' => true],
             'fields' => [
                 ['name' => 'platform', 'label' => 'Platform', 'required' => true],
+                ['name' => 'file_name', 'label' => 'File name', 'required' => true],
                 ['name' => 'version', 'label' => 'Version', 'required' => true],
                 ['name' => 'file_size', 'label' => 'File size', 'required' => true],
                 ['name' => 'download_url', 'label' => 'Download URL', 'required' => true],
@@ -981,7 +984,7 @@ final class AdminController
             'heading' => "X\u{00F3}a download",
             'message' => "B\u{1EA1}n c\u{00F3} ch\u{1EAF}c ch\u{1EAF}n mu\u{1ED1}n x\u{00F3}a download n\u{00E0}y?",
             'row' => $row,
-            'summary' => ['Platform' => 'platform', 'Version' => 'version', 'URL' => 'download_url'],
+            'summary' => ['Platform' => 'platform', 'File name' => 'file_name', 'Version' => 'version', 'URL' => 'download_url'],
             'actionUrl' => '/admin/downloads/delete',
             'backUrl' => '/admin/downloads',
             'flash' => $this->pullFlash(),
@@ -994,6 +997,7 @@ final class AdminController
         $id = (int) ($_POST['id'] ?? 0);
         $data = [
             'platform' => trim((string) ($_POST['platform'] ?? '')),
+            'file_name' => trim((string) ($_POST['file_name'] ?? '')),
             'version' => trim((string) ($_POST['version'] ?? '')),
             'file_size' => trim((string) ($_POST['file_size'] ?? '')),
             'download_url' => trim((string) ($_POST['download_url'] ?? '')),
@@ -1002,7 +1006,7 @@ final class AdminController
             'sort_order' => (int) ($_POST['sort_order'] ?? 0),
         ];
 
-        if ($data['platform'] === '' || $data['version'] === '' || $data['file_size'] === '' || $data['download_url'] === '') {
+        if ($data['platform'] === '' || $data['file_name'] === '' || $data['version'] === '' || $data['file_size'] === '' || $data['download_url'] === '') {
             $this->redirectWithFlash($id ? '/admin/downloads/' . $id . '/edit' : '/admin/downloads/create', "Th\u{00F4}ng tin download ch\u{01B0}a \u{0111}\u{1EA7}y \u{0111}\u{1EE7}.", 'error');
         }
 
@@ -1010,16 +1014,16 @@ final class AdminController
             if ($id > 0) {
                 $data['id'] = $id;
                 Database::connection()->prepare(
-                    'update downloads set platform = :platform, version = :version, file_size = :file_size, download_url = :download_url, notes = :notes, is_active = :is_active, sort_order = :sort_order, updated_at = now() where id = :id'
+                    'update downloads set platform = :platform, file_name = :file_name, version = :version, file_size = :file_size, download_url = :download_url, notes = :notes, is_active = :is_active, sort_order = :sort_order, updated_at = now() where id = :id'
                 )->execute($data);
             } else {
                 Database::connection()->prepare(
-                    'insert into downloads (platform, version, file_size, download_url, notes, is_active, sort_order)
-                     values (:platform, :version, :file_size, :download_url, :notes, :is_active, :sort_order)'
+                    'insert into downloads (platform, file_name, version, file_size, download_url, notes, is_active, sort_order)
+                     values (:platform, :file_name, :version, :file_size, :download_url, :notes, :is_active, :sort_order)'
                 )->execute($data);
             }
         } catch (Throwable) {
-            $this->redirectWithFlash($id ? '/admin/downloads/' . $id . '/edit' : '/admin/downloads/create', "Kh\u{00F4}ng th\u{1EC3} l\u{01B0}u download. Platform c\u{00F3} th\u{1EC3} \u{0111}\u{00E3} t\u{1ED3}n t\u{1EA1}i.", 'error');
+            $this->redirectWithFlash($id ? '/admin/downloads/' . $id . '/edit' : '/admin/downloads/create', "Kh\u{00F4}ng th\u{1EC3} l\u{01B0}u download.", 'error');
         }
 
         $this->redirectWithFlash('/admin/downloads', "\u{0110}\u{00E3} l\u{01B0}u download.");

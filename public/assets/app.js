@@ -24,7 +24,15 @@ document.addEventListener('DOMContentLoaded', () => {
         document.body.classList.remove('auth-open');
     };
 
-    const closePopup = () => {
+    const rememberDismissed = () => {
+        window.localStorage.setItem(popupStorageKey, '1');
+    };
+
+    const closePopup = (persistDismissed = false) => {
+        if (persistDismissed) {
+            rememberDismissed();
+        }
+
         backdrop.classList.remove('is-open');
         backdrop.setAttribute('aria-hidden', 'true');
         unlockScroll();
@@ -68,25 +76,22 @@ document.addEventListener('DOMContentLoaded', () => {
     timerId = window.setInterval(renderCountdown, 1000);
 
     backdrop.querySelectorAll('[data-launch-popup-close]').forEach((button) => {
-        button.addEventListener('click', closePopup);
+        button.addEventListener('click', () => closePopup(true));
     });
 
     backdrop.querySelectorAll('a[href]').forEach((link) => {
-        link.addEventListener('click', () => {
-            window.localStorage.setItem(popupStorageKey, '1');
-            closePopup();
-        });
+        link.addEventListener('click', () => closePopup(true));
     });
 
     backdrop.addEventListener('click', (event) => {
         if (event.target === backdrop) {
-            closePopup();
+            closePopup(true);
         }
     });
 
     document.addEventListener('keydown', (event) => {
         if (event.key === 'Escape' && backdrop.classList.contains('is-open')) {
-            closePopup();
+            closePopup(true);
         }
     });
 });

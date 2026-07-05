@@ -108,35 +108,36 @@ final class ContentRepository
     public function downloadPlatforms(): array
     {
         $downloads = $this->downloads();
+        $platformDownloads = $this->groupDownloadsByPlatform($downloads);
 
         return [
             [
                 'key' => 'java',
                 'name' => 'JAVA',
-                'subtitle' => 'Danh sach day du cac ban JAR da tai len.',
+                'subtitle' => 'Danh sách đầy đủ các bản JAR đã tải lên.',
                 'current_label' => 'JAVA',
-                'versions' => $this->javaDownloadVersions(),
+                'versions' => $this->javaDownloadVersions($platformDownloads['java'] ?? []),
             ],
             [
                 'key' => 'android',
                 'name' => 'Android',
-                'subtitle' => 'Phien ban APK danh cho dien thoai Android.',
+                'subtitle' => 'Phiên bản APK dành cho điện thoại Android.',
                 'current_label' => 'Android',
-                'versions' => $this->androidDownloadVersions($downloads),
+                'versions' => $this->androidDownloadVersions($platformDownloads['android'] ?? []),
             ],
             [
                 'key' => 'windows',
                 'name' => 'Windows',
-                'subtitle' => 'Phien ban PC va gia lap san sang tai xuong.',
+                'subtitle' => 'Phiên bản PC và giả lập sẵn sàng tải xuống.',
                 'current_label' => 'Windows',
-                'versions' => $this->windowsDownloadVersions(),
+                'versions' => $this->windowsDownloadVersions($platformDownloads['windows'] ?? []),
             ],
             [
                 'key' => 'ios',
                 'name' => 'iOS',
-                'subtitle' => 'Phien ban danh cho thiet bi Apple.',
+                'subtitle' => 'Phiên bản dành cho thiết bị Apple.',
                 'current_label' => 'iOS',
-                'versions' => $this->iosDownloadVersions(),
+                'versions' => $this->iosDownloadVersions($platformDownloads['ios'] ?? []),
             ],
         ];
     }
@@ -296,8 +297,39 @@ final class ContentRepository
         return $this->postsTableSchema;
     }
 
-    private function javaDownloadVersions(): array
+    private function javaDownloadVersions(array $downloads): array
     {
+        $databaseVersions = $this->databaseDownloadVersions($downloads, 'H盻・tr盻｣ mﾃ｡y Java/J2ME.');
+
+        if ($databaseVersions !== []) {
+            return $databaseVersions;
+        }
+
+        $fallbackFiles = array_values(array_filter(
+            $this->downloadFilesByExtensions(['jar', 'zip']),
+            fn (array $file): bool => strcasecmp($file['name'], 'Ninjaschoolblue.zip') !== 0
+        ));
+
+        usort($fallbackFiles, fn (array $a, array $b): int => $this->compareDownloadFiles($a['name'], $b['name']));
+
+        if ($fallbackFiles !== []) {
+            return array_map(function (array $file): array {
+                $extension = strtolower((string) pathinfo($file['name'], PATHINFO_EXTENSION));
+                $version = $extension === 'jar'
+                    ? $this->jarVersionLabel($file['name'])
+                    : pathinfo($file['name'], PATHINFO_FILENAME);
+
+                return [
+                    'title' => $file['name'],
+                    'version' => $version,
+                    'file_name' => $file['name'],
+                    'file_size' => $this->formatFileSize((int) $file['size']),
+                    'notes' => 'Hỗ trợ máy Java/J2ME.',
+                    'download_url' => '/file/' . rawurlencode($file['name']),
+                ];
+            }, $fallbackFiles);
+        }
+
         $files = $this->downloadFilesByExtensions(['jar']);
 
         usort($files, fn (array $a, array $b): int => $this->compareDownloadFiles($a['name'], $b['name']));
@@ -331,6 +363,12 @@ final class ContentRepository
 
     private function androidDownloadVersions(array $downloads): array
     {
+        $databaseVersions = $this->databaseDownloadVersions($downloads, 'Android 8 tr盻・lﾃｪn.');
+
+        if ($databaseVersions !== []) {
+            return $databaseVersions;
+        }
+
         $apkFile = $this->downloadFileByName('Ninjaschoolblue.apk');
 
         if ($apkFile !== null) {
@@ -375,8 +413,27 @@ final class ContentRepository
         ]];
     }
 
-    private function windowsDownloadVersions(): array
+    private function windowsDownloadVersions(array $downloads): array
     {
+        $databaseVersions = $this->databaseDownloadVersions($downloads, 'B蘯｣n PC t蘯｣i v盻・vﾃ chﾆ｡i ngay.');
+
+        if ($databaseVersions !== []) {
+            return $databaseVersions;
+        }
+
+        $pcFile = $this->downloadFileByName('Ninjaschoolblue.zip');
+
+        if ($pcFile !== null) {
+            return [[
+                'title' => $pcFile['name'],
+                'version' => pathinfo($pcFile['name'], PATHINFO_FILENAME),
+                'file_name' => $pcFile['name'],
+                'file_size' => $this->formatFileSize((int) $pcFile['size']),
+                'notes' => 'Bản PC tải về và chơi ngay.',
+                'download_url' => '/file/' . rawurlencode($pcFile['name']),
+            ]];
+        }
+
         $files = $this->downloadFilesByExtensions(['zip']);
         $versions = [];
 
@@ -404,8 +461,14 @@ final class ContentRepository
         return $versions;
     }
 
-    private function iosDownloadVersions(): array
+    private function iosDownloadVersions(array $downloads): array
     {
+        $databaseVersions = $this->databaseDownloadVersions($downloads, 'iOS 12.0 tr盻・lﾃｪn.');
+
+        if ($databaseVersions !== []) {
+            return $databaseVersions;
+        }
+
         return [[
             'title' => 'iOS v1.0.0',
             'version' => 'v1.0.0',
@@ -485,6 +548,92 @@ final class ContentRepository
             (int) ($versionMatch[1] ?? 0),
             (int) ($multiplierMatch[1] ?? 0),
         ];
+    }
+
+    private function groupDownloadsByPlatform(array $downloads): array
+    {
+        $grouped = [];
+
+        foreach ($downloads as $download) {
+            $platform = $this->normalizeDownloadPlatform((string) ($download['platform'] ?? ''));
+
+            if ($platform === '') {
+                continue;
+            }
+
+            $grouped[$platform] ??= [];
+            $grouped[$platform][] = $download;
+        }
+
+        return $grouped;
+    }
+
+    private function databaseDownloadVersions(array $downloads, string $defaultNotes): array
+    {
+        $versions = [];
+
+        foreach ($downloads as $download) {
+            $downloadUrl = trim((string) ($download['download_url'] ?? '#'));
+            $fileName = $this->resolveDownloadFileName($download);
+            $version = trim((string) ($download['version'] ?? ''));
+
+            $versions[] = [
+                'title' => $fileName !== '' ? $fileName : $this->fallbackDownloadTitle((string) ($download['platform'] ?? 'Download'), $version),
+                'version' => $version !== '' ? $version : '-',
+                'file_name' => $fileName !== '' ? $fileName : '-',
+                'file_size' => trim((string) ($download['file_size'] ?? '-')) ?: '-',
+                'notes' => trim((string) ($download['notes'] ?? '')) ?: $defaultNotes,
+                'download_url' => $downloadUrl !== '' ? $downloadUrl : '#',
+            ];
+        }
+
+        return $versions;
+    }
+
+    private function resolveDownloadFileName(array $download): string
+    {
+        $fileName = trim((string) ($download['file_name'] ?? ''));
+
+        if ($fileName !== '') {
+            return $fileName;
+        }
+
+        $downloadUrl = trim((string) ($download['download_url'] ?? ''));
+
+        if ($downloadUrl === '') {
+            return '';
+        }
+
+        $path = (string) parse_url($downloadUrl, PHP_URL_PATH);
+
+        if ($path === '') {
+            return '';
+        }
+
+        return rawurldecode(basename($path));
+    }
+
+    private function fallbackDownloadTitle(string $platform, string $version): string
+    {
+        $label = $this->humanizeDownloadName($this->normalizeDownloadPlatform($platform));
+
+        if ($label === '') {
+            $label = 'Download';
+        }
+
+        return trim($label . ' ' . $version);
+    }
+
+    private function normalizeDownloadPlatform(string $platform): string
+    {
+        $normalized = strtolower(trim($platform));
+
+        return match ($normalized) {
+            'j2me', 'jar' => 'java',
+            'iphone', 'apple' => 'ios',
+            'pc' => 'windows',
+            default => $normalized,
+        };
     }
 
     private function jarTitle(string $fileName): string

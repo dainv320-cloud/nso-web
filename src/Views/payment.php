@@ -215,12 +215,14 @@ $activeCampaign = $activeCampaign ?? null;
             var resolved = false;
             var pollTimer = null;
             var countdownTimer = null;
+            var timeoutNotified = false;
+            var backgroundDeadline = null;
 
-            function closeQr() {
+            function closeQr(stopPolling) {
                 backdrop.classList.remove('is-open');
                 backdrop.setAttribute('aria-hidden', 'true');
 
-                if (pollTimer) {
+                if (stopPolling !== false && pollTimer) {
                     window.clearTimeout(pollTimer);
                     pollTimer = null;
                 }
@@ -285,7 +287,9 @@ $activeCampaign = $activeCampaign ?? null;
             }
 
             function poll() {
-                if (!statusUrl || resolved || !backdrop.classList.contains('is-open')) {
+                var canPollInBackground = backgroundDeadline && Date.now() < backgroundDeadline;
+
+                if (!statusUrl || resolved || (!backdrop.classList.contains('is-open') && !canPollInBackground)) {
                     return;
                 }
 
@@ -317,7 +321,7 @@ $activeCampaign = $activeCampaign ?? null;
                         }
                     }
 
-                    if (!resolved) {
+                    if (!resolved && (backdrop.classList.contains('is-open') || (backgroundDeadline && Date.now() < backgroundDeadline))) {
                         pollTimer = window.setTimeout(poll, 3000);
                     }
                 };
@@ -330,7 +334,10 @@ $activeCampaign = $activeCampaign ?? null;
                 secondsLeft -= 1;
 
                 if (secondsLeft <= 0) {
-                    finish('Giao dịch không thành công hoặc chưa nhận được webhook.', true);
+                    timeoutNotified = true;
+                    backgroundDeadline = Date.now() + 240000;
+                    closeQr(false);
+                    toast('Giao dịch chưa được xác nhận sau 60 giây, hệ thống sẽ tiếp tục kiểm tra trong nền.', true);
                     return;
                 }
 

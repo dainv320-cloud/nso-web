@@ -108,7 +108,8 @@ return new class extends Migration
         if (!Schema::hasTable('downloads')) {
             Schema::create('downloads', function (Blueprint $table): void {
                 $table->id();
-                $table->string('platform', 60)->unique();
+                $table->string('platform', 60);
+                $table->string('file_name', 255)->nullable();
                 $table->string('version', 40);
                 $table->string('file_size', 40);
                 $table->string('download_url', 500);
@@ -118,6 +119,12 @@ return new class extends Migration
                 $table->timestamps();
             });
         }
+
+        Schema::table('downloads', function (Blueprint $table): void {
+            if (!Schema::hasColumn('downloads', 'file_name')) {
+                $table->string('file_name', 255)->nullable()->after('platform');
+            }
+        });
 
         if (!Schema::hasTable('bank_accounts')) {
             Schema::create('bank_accounts', function (Blueprint $table): void {
