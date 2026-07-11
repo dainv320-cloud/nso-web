@@ -14,6 +14,7 @@ use Throwable;
 class Web2MWebhookController extends Controller
 {
     private const ACCESS_TOKEN = '6AFBE818-C736-D46B-36A4-6A435A9C1887';
+    private const MIN_TRANSACTION_DATE = '2026-07-11';
     private const ACCESS_TOKENS = [
         self::ACCESS_TOKEN,
         'bd89c64c4987d9814b9a37dcd885b91a5501d00a3d18be7ccb325354cace28c1',
@@ -158,6 +159,10 @@ class Web2MWebhookController extends Controller
         $description = $normalizedItem['description'];
         $type = $normalizedItem['type'];
 
+        if ($this->isBeforeMinimumTransactionDate($normalizedItem)) {
+            return;
+        }
+
         if ($web2mTransactionId === '' || $amount <= 0 || $description === '') {
             $this->logFailedWebhook($web2mTransactionId, $amount, $description, $rawPayload, 'Du lieu giao dich Web2M khong hop le.');
 
@@ -234,6 +239,7 @@ class Web2MWebhookController extends Controller
             'description' => trim((string) $description),
             'type' => $type,
             'bank' => $item['bank'] ?? $item['NganHang'] ?? null,
+            'transaction_date' => $this->transactionDateFromItem($item),
             'raw_item' => $item,
         ];
     }
@@ -243,6 +249,89 @@ class Web2MWebhookController extends Controller
         $normalized = preg_replace('/[^\d.\-]/', '', str_replace(',', '', (string) $value));
 
         return (float) ($normalized === '' ? 0 : $normalized);
+    }
+
+    private function isBeforeMinimumTransactionDate(array $item): bool
+    {
+        $transactionDate = $item['transaction_date'] ?? null;
+
+        if (!$transactionDate instanceof \DateTimeImmutable) {
+            return false;
+        }
+
+        $minimumDate = new \DateTimeImmutable(self::MIN_TRANSACTION_DATE . ' 00:00:00');
+
+        return $transactionDate < $minimumDate;
+    }
+
+    private function transactionDateFromItem(array $item): ?\DateTimeImmutable
+    {
+        foreach ($this->transactionDateFields() as $field) {
+            if (!isset($item[$field])) {
+                continue;
+            }
+
+            $date = $this->parseTransactionDate($item[$field]);
+
+            if ($date) {
+                return $date;
+            }
+        }
+
+        return null;
+    }
+
+    private function transactionDateFields(): array
+    {
+        return [
+            'NgayGiaoDich',
+            'NgayGD',
+            'Ngay',
+            'NgayHieuLuc',
+            'NgayGioGiaoDich',
+            'ThoiGianGiaoDich',
+            'ThoiGian',
+            'transaction_date',
+            'transactionDate',
+            'created_at',
+            'date',
+            'time',
+        ];
+    }
+
+    private function parseTransactionDate(mixed $value): ?\DateTimeImmutable
+    {
+        $value = trim((string) $value);
+
+        if ($value === '') {
+            return null;
+        }
+
+        $formats = [
+            'd/m/Y H:i:s',
+            'd/m/Y H:i',
+            'd-m-Y H:i:s',
+            'd-m-Y H:i',
+            'd/m/Y',
+            'd-m-Y',
+            'Y-m-d H:i:s',
+            'Y-m-d H:i',
+            'Y-m-d',
+            \DateTimeInterface::ATOM,
+        ];
+
+        foreach ($formats as $format) {
+            $date = \DateTimeImmutable::createFromFormat('!' . $format, $value);
+            $errors = \DateTimeImmutable::getLastErrors();
+
+            if ($date instanceof \DateTimeImmutable && ($errors === false || ($errors['warning_count'] === 0 && $errors['error_count'] === 0))) {
+                return $date;
+            }
+        }
+
+        $timestamp = strtotime($value);
+
+        return $timestamp === false ? null : (new \DateTimeImmutable())->setTimestamp($timestamp);
     }
 
     private function paymentFromDescription(string $description): ?Payment
