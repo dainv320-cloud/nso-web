@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Jobs\ProcessWeb2MWebhookTransaction;
 use App\Services\Web2MWebhookProcessor;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -36,8 +35,7 @@ class Web2MWebhookController extends Controller
                     continue;
                 }
 
-                ProcessWeb2MWebhookTransaction::dispatch($item, $payload)
-                    ->delay(now()->addSeconds(random_int(3, 5)));
+                $processor->process($item, $payload);
             }
         } catch (Throwable $exception) {
             $this->writePaymentLog($request, 'exception', $exception);
