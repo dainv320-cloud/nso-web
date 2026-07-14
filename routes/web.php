@@ -20,7 +20,6 @@ Route::get('/download', fn () => (new SiteController())->download());
 Route::get('/payment', fn () => (new SiteController())->payment());
 Route::post('/payment', fn () => (new SiteController())->submitPayment());
 Route::get('/payment/status', fn () => (new SiteController())->paymentStatus());
-Route::post('/webhook/callback', fn () => (new SiteController())->bankWebhook());
 Route::get('/profile', fn () => (new SiteController())->profile());
 Route::post('/profile/email', fn () => (new SiteController())->submitProfileEmail());
 Route::post('/profile/password', fn () => (new SiteController())->submitProfilePassword());

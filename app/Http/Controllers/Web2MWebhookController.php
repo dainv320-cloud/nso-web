@@ -495,12 +495,6 @@ class Web2MWebhookController extends Controller
         }
     }
 
-    private function web2mTransactionId(array $item): string
-    {
-        // Web2M document: id la ma dinh danh duy nhat. transactionID la ma tu ngan hang.
-        return trim((string) ($item['id'] ?? $item['transaction_id'] ?? $item['transactionID'] ?? ''));
-    }
-
     private function paymentIsSuccess(Payment $payment): bool
     {
         return strtolower((string) ($payment->status ?? '')) === 'success'
