@@ -19,6 +19,7 @@ class Web2MWebhookController extends Controller
         self::ACCESS_TOKEN,
         'bd89c64c4987d9814b9a37dcd885b91a5501d00a3d18be7ccb325354cace28c1',
     ];
+    private ?array $userColumns = null;
 
     public function __invoke(Request $request): JsonResponse
     {
@@ -364,15 +365,27 @@ class Web2MWebhookController extends Controller
 
     private function creditUser(User $user, float $amount, int $coinAmount): void
     {
-        $balanceColumn = $this->firstUserColumn(['balance', 'money']);
-        $totalDepositColumn = $this->firstUserColumn(['tongnap', 'totalmoney']);
-        $monthlyDepositColumn = $this->firstUserColumn(['tongNapThang', 'tongnapthang']);
+        $balanceColumns = $this->existingUserColumns(['balance', 'money']);
+        $totalDepositColumns = $this->existingUserColumns(['tongnap', 'totalmoney']);
+        $monthlyDepositColumns = $this->existingUserColumns(['tongNapThang', 'tongnapthang']);
 
-        $values = [
-            $balanceColumn => max(0, (int) $user->{$balanceColumn}) + $coinAmount,
-            $totalDepositColumn => max(0, (int) $user->{$totalDepositColumn}) + (int) $amount,
-            $monthlyDepositColumn => max(0, (int) $user->{$monthlyDepositColumn}) + (int) $amount,
-        ];
+        $newBalance = $this->maxUserColumnValue($user, $balanceColumns) + $coinAmount;
+        $newTotalDeposit = $this->maxUserColumnValue($user, $totalDepositColumns) + (int) $amount;
+        $newMonthlyDeposit = $this->maxUserColumnValue($user, $monthlyDepositColumns) + (int) $amount;
+
+        $values = [];
+
+        foreach ($balanceColumns as $column) {
+            $values[$column] = $newBalance;
+        }
+
+        foreach ($totalDepositColumns as $column) {
+            $values[$column] = $newTotalDeposit;
+        }
+
+        foreach ($monthlyDepositColumns as $column) {
+            $values[$column] = $newMonthlyDeposit;
+        }
 
         if (Schema::hasColumn('users', 'tongNapTuan')) {
             $values['tongNapTuan'] = max(0, (int) $user->tongNapTuan) + (int) $amount;
@@ -543,15 +556,75 @@ class Web2MWebhookController extends Controller
         return (int) floor($amount);
     }
 
-    private function firstUserColumn(array $columns): string
+    private function existingUserColumns(array $columns): array
     {
+        $existing = [];
+
         foreach ($columns as $column) {
-            if (Schema::hasColumn('users', $column)) {
-                return $column;
+            $actualColumn = $this->actualUserColumn($column);
+
+            if ($actualColumn !== null) {
+                $existing[] = $actualColumn;
             }
         }
 
-        return $columns[0];
+        $existing = $this->uniqueColumnNames($existing);
+
+        return $existing !== [] ? $existing : [$columns[0]];
+    }
+
+    private function maxUserColumnValue(User $user, array $columns): int
+    {
+        $values = [0];
+
+        foreach ($columns as $column) {
+            $values[] = max(0, (int) $user->{$column});
+        }
+
+        return max($values);
+    }
+
+    private function actualUserColumn(string $column): ?string
+    {
+        $columns = $this->userColumns();
+
+        return $columns[strtolower($column)] ?? null;
+    }
+
+    private function userColumns(): array
+    {
+        if ($this->userColumns !== null) {
+            return $this->userColumns;
+        }
+
+        $columns = [];
+
+        foreach (Schema::getColumnListing('users') as $column) {
+            $columns[strtolower($column)] = $column;
+        }
+
+        $this->userColumns = $columns;
+
+        return $this->userColumns;
+    }
+
+    private function uniqueColumnNames(array $columns): array
+    {
+        $seen = [];
+        $unique = [];
+
+        foreach ($columns as $column) {
+            $key = strtolower($column);
+
+            if (isset($seen[$key])) {
+                continue;
+            }
+
+            $seen[$key] = true;
+            $unique[] = $column;
+        }
+
+        return $unique;
     }
 
     private function paymentCodeColumn(): string
