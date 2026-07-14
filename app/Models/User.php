@@ -24,7 +24,6 @@ class User extends Authenticatable
         'tongnap',
         'tongNapThang',
         'tongNapTuan',
-        'quanew',
     ];
 
     protected $hidden = [
@@ -43,7 +42,6 @@ class User extends Authenticatable
             'tongnap' => 'integer',
             'tongNapThang' => 'integer',
             'tongNapTuan' => 'integer',
-            'quanew' => 'integer',
             'password' => 'hashed',
         ];
     }

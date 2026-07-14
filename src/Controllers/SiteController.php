@@ -743,31 +743,17 @@ final class SiteController
                 ]), 409);
             }
 
-            if ($this->usesModernUserSchema()) {
-                $statement = $connection->prepare(
-                    'insert into users (name, username, email, password, status, activated, active, role, balance, tongnap, tongNapThang, tongNapTuan, quanew, created_at, updated_at)
-                     values (:name, :username, :email, :password, 1, 1, 1, 0, :balance, 0, 0, 0, 0, now(), now())'
-                );
-                $statement->execute([
-                    'name' => null,
-                    'username' => $username,
-                    'email' => $email !== '' ? $email : null,
-                    'password' => password_hash($password, PASSWORD_BCRYPT),
-                    'balance' => $this->registerBonusAmount(),
-                ]);
-            } else {
-                $statement = $connection->prepare(
-                    'insert into users (name, username, email, password, ban, is_active, type_admin, money, totalmoney, tongnapthang, created_at, updated_at)
-                     values (:name, :username, :email, :password, 0, 1, 0, :money, 0, 0, now(), now())'
-                );
-                $statement->execute([
-                    'name' => null,
-                    'username' => $username,
-                    'email' => $email !== '' ? $email : null,
-                    'password' => password_hash($password, PASSWORD_BCRYPT),
-                    'money' => $this->registerBonusAmount(),
-                ]);
-            }
+            $statement = $connection->prepare(
+                'insert into users (name, username, email, password, status, activated, active, role, balance, tongnap, tongNapThang, tongNapTuan, created_at, updated_at)
+                 values (:name, :username, :email, :password, 1, 1, 1, 0, :balance, 0, 0, 0, now(), now())'
+            );
+            $statement->execute([
+                'name' => null,
+                'username' => $username,
+                'email' => $email !== '' ? $email : null,
+                'password' => password_hash($password, PASSWORD_BCRYPT),
+                'balance' => $this->registerBonusAmount(),
+            ]);
             $account = [
                 'id' => (int) $connection->lastInsertId(),
                 'username' => $username,
@@ -890,9 +876,6 @@ final class SiteController
             'tongnap' => 0,
             'tongNapThang' => 0,
             'tongNapTuan' => 0,
-            'quanew' => 0,
-            'money' => 0,
-            'totalmoney' => 0,
             'ban' => 0,
         ];
     }
@@ -1618,18 +1601,6 @@ final class SiteController
         return isset($schema[strtolower($column)]);
     }
 
-    private function actualUserColumn(string $column): ?string
-    {
-        $schema = $this->userTableSchema();
-        $row = $schema[strtolower($column)] ?? null;
-
-        if (!$row) {
-            return null;
-        }
-
-        return (string) ($row['Field'] ?? $column);
-    }
-
     private function accountWithPasswordQuery(): string
     {
         if ($this->usesModernUserSchema()) {
@@ -1641,11 +1612,7 @@ final class SiteController
 
     private function accountProfileQuery(): string
     {
-        if ($this->usesModernUserSchema()) {
-            return 'select id, name, username, email, status, activated, active, role, balance, tongnap, tongNapThang, tongNapTuan, quanew, balance as money, tongnap as totalmoney, case when status <> 1 or activated = 0 or active = 0 then 1 else 0 end as ban, created_at, updated_at from users where username = :username limit 1';
-        }
-
-        return 'select id, name, username, email, 1 as status, 1 as activated, is_active as active, type_admin as role, totalmoney as tongnap, tongnapthang as tongNapThang, 0 as tongNapTuan, money as quanew, money, totalmoney, ban, created_at, updated_at from users where username = :username limit 1';
+        return 'select id, name, username, email, status, activated, active, role, balance, tongnap, tongNapThang, tongNapTuan, case when status <> 1 or activated = 0 or active = 0 then 1 else 0 end as ban, created_at, updated_at from users where username = :username limit 1';
     }
 
     private function isAccountAccessible(array $account): bool
@@ -1662,54 +1629,27 @@ final class SiteController
 
     private function applySuccessfulDeposit(\PDO $connection, array $userRow, float $amount, int $coinAmount): void
     {
-        $values = ['user_id' => (int) ($userRow['id'] ?? 0)];
-        $updates = [];
         $now = date('Y-m-d H:i:s');
-
-        $newBalance = $this->maxRowValue($userRow, ['balance', 'money']) + $coinAmount;
-        $newTotalDeposit = $this->maxRowValue($userRow, ['tongnap', 'totalmoney']) + (int) $amount;
-        $newMonthlyDeposit = $this->nextMonthlyDepositTotal($userRow, $amount);
-        $newWeeklyDeposit = $this->nextWeeklyDepositTotal($userRow, $amount);
-
-        foreach ($this->existingUserColumns(['balance', 'money']) as $column) {
-            $updates[] = $this->quoteName($column) . ' = :' . $column;
-            $values[$column] = $newBalance;
-        }
-
-        foreach ($this->existingUserColumns(['tongnap', 'totalmoney']) as $column) {
-            $updates[] = $this->quoteName($column) . ' = :' . $column;
-            $values[$column] = $newTotalDeposit;
-        }
-
-        foreach ($this->existingUserColumns(['tongNapThang', 'tongnapthang']) as $column) {
-            $updates[] = $this->quoteName($column) . ' = :' . $column;
-            $values[$column] = $newMonthlyDeposit;
-        }
-
-        if ($this->userHasColumn('tongNapTuan')) {
-            $updates[] = '`tongNapTuan` = :tongNapTuan';
-            $values['tongNapTuan'] = $newWeeklyDeposit;
-        }
-
-        if ($this->userHasColumn(self::MONTHLY_RESET_COLUMN)) {
-            $updates[] = $this->quoteName(self::MONTHLY_RESET_COLUMN) . ' = :monthly_reset_at';
-            $values['monthly_reset_at'] = $now;
-        }
-
-        if ($this->userHasColumn(self::WEEKLY_RESET_COLUMN)) {
-            $updates[] = $this->quoteName(self::WEEKLY_RESET_COLUMN) . ' = :weekly_reset_at';
-            $values['weekly_reset_at'] = $now;
-        }
-
-        if ($this->userHasColumn('updated_at')) {
-            $updates[] = 'updated_at = now()';
-        }
 
         $connection->prepare(
             'update users
-             set ' . implode(",\n                 ", $updates) . '
+             set balance = :balance,
+                 tongnap = :tongnap,
+                 tongNapThang = :tong_nap_thang,
+                 tongNapTuan = :tong_nap_tuan,
+                 ' . self::MONTHLY_RESET_COLUMN . ' = :monthly_reset_at,
+                 ' . self::WEEKLY_RESET_COLUMN . ' = :weekly_reset_at,
+                 updated_at = now()
              where id = :user_id'
-        )->execute($values);
+        )->execute([
+            'balance' => max(0, (int) ($userRow['balance'] ?? 0)) + $coinAmount,
+            'tongnap' => max(0, (int) ($userRow['tongnap'] ?? 0)) + (int) $amount,
+            'tong_nap_thang' => $this->nextMonthlyDepositTotal($userRow, $amount),
+            'tong_nap_tuan' => $this->nextWeeklyDepositTotal($userRow, $amount),
+            'monthly_reset_at' => $now,
+            'weekly_reset_at' => $now,
+            'user_id' => (int) ($userRow['id'] ?? 0),
+        ]);
     }
 
     private function activateUserOnEligibleDeposit(\PDO $connection, int $userId, float $amount): void
@@ -1741,7 +1681,7 @@ final class SiteController
     {
         $current = $this->shouldResetTongNapThang($userRow[self::MONTHLY_RESET_COLUMN] ?? null)
             ? 0
-            : $this->maxRowValue($userRow, ['tongNapThang', 'tongnapthang']);
+            : max(0, (int) ($userRow['tongNapThang'] ?? 0));
 
         return $current + (int) $amount;
     }
@@ -1757,75 +1697,12 @@ final class SiteController
 
     private function userDepositQuery(): string
     {
-        $columns = ['id', 'username'];
-
-        foreach (['balance', 'money', 'tongnap', 'totalmoney', 'tongNapThang', 'tongnapthang', 'tongNapTuan', self::MONTHLY_RESET_COLUMN, self::WEEKLY_RESET_COLUMN] as $column) {
-            $actualColumn = $this->actualUserColumn($column);
-
-            if ($actualColumn !== null) {
-                $columns[] = $actualColumn;
-            }
-        }
-
-        $columns = $this->uniqueColumnNames($columns);
-        $quotedColumns = array_map(fn (string $column): string => $this->quoteName($column), $columns);
-
-        return 'select ' . implode(', ', $quotedColumns) . '
-                 from users
-                 where id = :id
-                 limit 1
-                 for update';
-    }
-
-    private function existingUserColumns(array $columns): array
-    {
-        $existing = [];
-
-        foreach ($columns as $column) {
-            $actualColumn = $this->actualUserColumn($column);
-
-            if ($actualColumn !== null) {
-                $existing[] = $actualColumn;
-            }
-        }
-
-        $existing = $this->uniqueColumnNames($existing);
-
-        return $existing !== [] ? $existing : [$columns[0]];
-    }
-
-    private function maxRowValue(array $row, array $columns): int
-    {
-        $values = [0];
-
-        foreach ($columns as $column) {
-            $values[] = max(0, (int) ($row[$column] ?? 0));
-        }
-
-        return max($values);
-    }
-
-    private function quoteName(string $name): string
-    {
-        return '`' . str_replace('`', '``', $name) . '`';
-    }
-
-    private function uniqueColumnNames(array $columns): array
-    {
-        $seen = [];
-        $unique = [];
-
-        foreach ($columns as $column) {
-            $key = strtolower($column);
-
-            if (isset($seen[$key])) {
-                continue;
-            }
-
-            $seen[$key] = true;
-            $unique[] = $column;
-        }
-
-        return $unique;
+        return 'select id, username, balance, tongnap, tongNapThang, tongNapTuan, '
+            . self::MONTHLY_RESET_COLUMN . ', '
+            . self::WEEKLY_RESET_COLUMN . '
+             from users
+             where id = :id
+             limit 1
+             for update';
     }
 }

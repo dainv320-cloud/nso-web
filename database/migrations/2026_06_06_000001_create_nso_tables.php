@@ -20,10 +20,16 @@ return new class extends Migration
                 $table->boolean('ban')->default(false);
                 $table->boolean('is_active')->default(true);
                 $table->smallInteger('type_admin')->default(0);
-                $table->integer('money')->default(0);
-                $table->integer('totalmoney')->default(0);
-                $table->integer('tongnapthang')->default(0);
-                $table->timestamp('tongnapthang_reset_at')->nullable();
+                $table->integer('status')->default(1);
+                $table->boolean('activated')->default(true);
+                $table->boolean('active')->default(true);
+                $table->integer('role')->default(0);
+                $table->integer('balance')->default(0);
+                $table->integer('tongnap')->default(0);
+                $table->integer('tongNapThang')->default(0);
+                $table->integer('tongNapTuan')->default(0);
+                $table->dateTime('tongNapThangResetAt')->nullable();
+                $table->dateTime('tongNapTuanResetAt')->nullable();
                 $table->timestamps();
             });
         }
@@ -49,24 +55,48 @@ return new class extends Migration
                 $table->smallInteger('type_admin')->default(0)->after('is_active');
             }
 
-            if (!Schema::hasColumn('users', 'money')) {
-                $table->integer('money')->default(0)->after('type_admin');
+            if (!Schema::hasColumn('users', 'status')) {
+                $table->integer('status')->default(1)->after('type_admin');
             }
 
-            if (!Schema::hasColumn('users', 'totalmoney')) {
-                $table->integer('totalmoney')->default(0)->after('money');
+            if (!Schema::hasColumn('users', 'activated')) {
+                $table->boolean('activated')->default(true)->after('status');
             }
 
-            if (!Schema::hasColumn('users', 'tongnapthang')) {
-                $table->integer('tongnapthang')->default(0)->after('totalmoney');
+            if (!Schema::hasColumn('users', 'active')) {
+                $table->boolean('active')->default(true)->after('activated');
             }
 
-            if (!Schema::hasColumn('users', 'tongnapthang_reset_at')) {
-                $table->timestamp('tongnapthang_reset_at')->nullable()->after('tongnapthang');
+            if (!Schema::hasColumn('users', 'role')) {
+                $table->integer('role')->default(0)->after('active');
+            }
+
+            if (!Schema::hasColumn('users', 'balance')) {
+                $table->integer('balance')->default(0)->after('role');
+            }
+
+            if (!Schema::hasColumn('users', 'tongnap')) {
+                $table->integer('tongnap')->default(0)->after('balance');
+            }
+
+            if (!Schema::hasColumn('users', 'tongNapThang')) {
+                $table->integer('tongNapThang')->default(0)->after('tongnap');
+            }
+
+            if (!Schema::hasColumn('users', 'tongNapTuan')) {
+                $table->integer('tongNapTuan')->default(0)->after('tongNapThang');
+            }
+
+            if (!Schema::hasColumn('users', 'tongNapThangResetAt')) {
+                $table->dateTime('tongNapThangResetAt')->nullable()->after('tongNapThang');
+            }
+
+            if (!Schema::hasColumn('users', 'tongNapTuanResetAt')) {
+                $table->dateTime('tongNapTuanResetAt')->nullable()->after('tongNapTuan');
             }
 
             if (!Schema::hasColumn('users', 'created_at')) {
-                $table->timestamp('created_at')->nullable()->after('tongnapthang_reset_at');
+                $table->timestamp('created_at')->nullable()->after('tongNapTuanResetAt');
             }
 
             if (!Schema::hasColumn('users', 'updated_at')) {
@@ -202,10 +232,16 @@ return new class extends Migration
                 'ban' => false,
                 'is_active' => true,
                 'type_admin' => 1,
-                'money' => 0,
-                'totalmoney' => 0,
-                'tongnapthang' => 0,
-                'tongnapthang_reset_at' => now(),
+                'status' => 1,
+                'activated' => true,
+                'active' => true,
+                'role' => 99,
+                'balance' => 0,
+                'tongnap' => 0,
+                'tongNapThang' => 0,
+                'tongNapTuan' => 0,
+                'tongNapThangResetAt' => now(),
+                'tongNapTuanResetAt' => now(),
                 'created_at' => now(),
                 'updated_at' => now(),
             ],

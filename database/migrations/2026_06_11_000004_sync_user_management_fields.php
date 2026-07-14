@@ -13,12 +13,6 @@ return new class extends Migration
             return;
         }
 
-        Schema::table('users', function (Blueprint $table): void {
-            if (!Schema::hasColumn('users', 'tongnapthang')) {
-                $table->integer('tongnapthang')->default(0)->after('totalmoney');
-            }
-        });
-
         DB::table('users')->whereNull('name')->update([
             'name' => DB::raw('username'),
         ]);
@@ -34,12 +28,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        if (!Schema::hasTable('users') || !Schema::hasColumn('users', 'tongnapthang')) {
-            return;
-        }
-
-        Schema::table('users', function (Blueprint $table): void {
-            $table->dropColumn('tongnapthang');
-        });
+        //
     }
 };

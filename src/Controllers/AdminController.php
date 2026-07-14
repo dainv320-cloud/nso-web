@@ -114,7 +114,7 @@ final class AdminController
                  where lower(username) like :search
                     or lower(coalesce(name, \'\')) like :search
                     or lower(coalesce(email, \'\')) like :search',
-                'select id, username, name, email, status, activated, active, role, balance, tongnap, tongNapThang, tongNapTuan, quanew
+                'select id, username, name, email, status, activated, active, role, balance, tongnap, tongNapThang, tongNapTuan
                  from users
                  where lower(username) like :search
                     or lower(coalesce(name, \'\')) like :search
@@ -125,7 +125,7 @@ final class AdminController
             )
             : $this->paginateRows(
                 'select count(*) from users',
-                'select id, username, name, email, status, activated, active, role, balance, tongnap, tongNapThang, tongNapTuan, quanew
+                'select id, username, name, email, status, activated, active, role, balance, tongnap, tongNapThang, tongNapTuan
                  from users
                  order by id desc'
             );
@@ -155,10 +155,6 @@ final class AdminController
                 ['key' => 'email', 'label' => 'Email'],
                 ['key' => 'is_active', 'label' => 'Kích hoạt', 'format' => 'bool'],
                 ['key' => 'ban', 'label' => 'Ban', 'format' => 'bool'],
-                ['key' => 'money', 'label' => 'Coin', 'format' => 'money'],
-                ['key' => 'totalmoney', 'label' => 'Tổng nạp', 'format' => 'money'],
-                ['key' => 'tongnapthang', 'label' => 'Nạp tháng', 'format' => 'money'],
-                ['key' => 'money', 'label' => 'Coin', 'format' => 'money'],
                 ['key' => 'type_admin', 'label' => 'Quyen', 'format' => 'admin_role'],
                 ['key' => 'created_at', 'label' => 'Tạo lúc', 'format' => 'datetime'],
                 ['key' => 'updated_at', 'label' => 'Cập nhật', 'format' => 'datetime'],
@@ -176,7 +172,6 @@ final class AdminController
                 ['key' => 'tongnap', 'label' => 'Tong nap', 'format' => 'money'],
                 ['key' => 'tongNapThang', 'label' => 'Tong nap thang', 'format' => 'money'],
                 ['key' => 'tongNapTuan', 'label' => 'Tong nap tuan', 'format' => 'money'],
-                ['key' => 'quanew', 'label' => 'Qua new', 'format' => 'money'],
             ],
             'actions' => ['edit' => '/admin/users/%s/edit', 'delete' => '/admin/users/%s/delete'],
             'flash' => $this->pullFlash(),
@@ -215,7 +210,7 @@ final class AdminController
             'heading' => $id ? "S\u{1EED}a user" : "Th\u{00EA}m user",
             'backUrl' => '/admin/users',
             'actionUrl' => '/admin/users/save',
-            'row' => $row ?? ['status' => 1, 'activated' => 1, 'active' => 1, 'role' => self::ROLE_USER, 'balance' => 0, 'tongnap' => 0, 'tongNapThang' => 0, 'tongNapTuan' => 0, 'quanew' => 0],
+            'row' => $row ?? ['status' => 1, 'activated' => 1, 'active' => 1, 'role' => self::ROLE_USER, 'balance' => 0, 'tongnap' => 0, 'tongNapThang' => 0, 'tongNapTuan' => 0],
             'fields' => [
                 ['name' => 'username', 'label' => 'Username', 'required' => true],
                 ['name' => 'name', 'label' => 'Name'],
@@ -229,7 +224,6 @@ final class AdminController
                 ['name' => 'tongnap', 'label' => 'Tong nap', 'type' => 'money'],
                 ['name' => 'tongNapThang', 'label' => 'Tong nap thang', 'type' => 'money'],
                 ['name' => 'tongNapTuan', 'label' => 'Tong nap tuan', 'type' => 'money'],
-                ['name' => 'quanew', 'label' => 'Qua new', 'type' => 'money'],
             ],
             'flash' => $this->pullFlash(),
         ]);
@@ -291,12 +285,11 @@ final class AdminController
             'tongnap' => $this->moneyIntFromRequest('tongnap'),
             'tongNapThang' => $this->moneyIntFromRequest('tongNapThang'),
             'tongNapTuan' => $this->moneyIntFromRequest('tongNapTuan'),
-            'quanew' => $this->moneyIntFromRequest('quanew'),
         ];
 
         try {
             if ($id > 0) {
-                $sql = 'update users set name = :name, username = :username, email = :email, status = :status, activated = :activated, active = :active, role = :role, balance = :balance, tongnap = :tongnap, tongNapThang = :tongNapThang, tongNapTuan = :tongNapTuan, quanew = :quanew';
+                $sql = 'update users set name = :name, username = :username, email = :email, status = :status, activated = :activated, active = :active, role = :role, balance = :balance, tongnap = :tongnap, tongNapThang = :tongNapThang, tongNapTuan = :tongNapTuan';
 
                 if ($password !== '') {
                     if (strlen($password) < 6) {
@@ -313,8 +306,8 @@ final class AdminController
             } else {
                 $data['password'] = password_hash($password, PASSWORD_BCRYPT);
                 Database::connection()->prepare(
-                    'insert into users (name, username, email, password, status, activated, active, role, balance, tongnap, tongNapThang, tongNapTuan, quanew, created_at, updated_at)
-                     values (:name, :username, :email, :password, :status, :activated, :active, :role, :balance, :tongnap, :tongNapThang, :tongNapTuan, :quanew, now(), now())'
+                    'insert into users (name, username, email, password, status, activated, active, role, balance, tongnap, tongNapThang, tongNapTuan, created_at, updated_at)
+                     values (:name, :username, :email, :password, :status, :activated, :active, :role, :balance, :tongnap, :tongNapThang, :tongNapTuan, now(), now())'
                 )->execute($data);
             }
         } catch (Throwable) {

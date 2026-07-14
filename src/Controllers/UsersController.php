@@ -12,7 +12,7 @@ final class UsersController
     public function index(): never
     {
         $statement = Database::connection()
-            ->query('select id, username, name, email, status, activated, active, role, balance, tongnap, tongNapThang, tongNapTuan, quanew, created_at, updated_at from users order by id desc');
+            ->query('select id, username, name, email, status, activated, active, role, balance, tongnap, tongNapThang, tongNapTuan, created_at, updated_at from users order by id desc');
 
         Response::json(['data' => $statement->fetchAll()]);
     }
@@ -20,7 +20,7 @@ final class UsersController
     public function show(int $id): never
     {
         $statement = Database::connection()
-            ->prepare('select id, username, name, email, status, activated, active, role, balance, tongnap, tongNapThang, tongNapTuan, quanew, created_at, updated_at from users where id = :id');
+            ->prepare('select id, username, name, email, status, activated, active, role, balance, tongnap, tongNapThang, tongNapTuan, created_at, updated_at from users where id = :id');
         $statement->execute(['id' => $id]);
 
         $user = $statement->fetch();
@@ -58,8 +58,8 @@ final class UsersController
 
         $connection = Database::connection();
         $statement = $connection->prepare(
-            'insert into users (name, username, email, password, status, activated, active, role, balance, tongnap, tongNapThang, tongNapTuan, quanew, created_at, updated_at)
-             values (:name, :username, :email, :password, 1, 1, 1, 0, 0, 0, 0, 0, 0, now(), now())'
+            'insert into users (name, username, email, password, status, activated, active, role, balance, tongnap, tongNapThang, tongNapTuan, created_at, updated_at)
+             values (:name, :username, :email, :password, 1, 1, 1, 0, 0, 0, 0, 0, now(), now())'
         );
         $statement->execute([
             'name' => $name !== '' ? $name : $username,
@@ -70,7 +70,7 @@ final class UsersController
 
         $id = (int) $connection->lastInsertId();
         $created = $connection->prepare(
-            'select id, username, name, email, status, activated, active, role, balance, tongnap, tongNapThang, tongNapTuan, quanew, created_at, updated_at from users where id = :id'
+            'select id, username, name, email, status, activated, active, role, balance, tongnap, tongNapThang, tongNapTuan, created_at, updated_at from users where id = :id'
         );
         $created->execute(['id' => $id]);
 
