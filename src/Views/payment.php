@@ -211,7 +211,7 @@ $activeCampaign = $activeCampaign ?? null;
 
             var statusText = backdrop.querySelector('[data-payment-status-text]');
             var statusUrl = backdrop.getAttribute('data-payment-status-url') || '';
-            var secondsLeft = 60;
+            var secondsLeft = 120;
             var resolved = false;
             var pollTimer = null;
             var countdownTimer = null;
@@ -337,7 +337,7 @@ $activeCampaign = $activeCampaign ?? null;
                     timeoutNotified = true;
                     backgroundDeadline = Date.now() + 240000;
                     closeQr(false);
-                    toast('Giao dịch chưa được xác nhận sau 60 giây, hệ thống sẽ tiếp tục kiểm tra trong nền.', true);
+                    toast('Giao dịch chưa được xác nhận sau 120 giây, hệ thống sẽ tiếp tục kiểm tra trong nền.', true);
                     return;
                 }
 
