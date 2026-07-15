@@ -11,7 +11,6 @@ class Payment extends Model
         'bank_account_id',
         'currency_id',
         'trans_id',
-        'type',
         'amount',
         'balance',
         'coin_amount',

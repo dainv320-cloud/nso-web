@@ -409,7 +409,6 @@ class Web2MWebhookController extends Controller
             rawPayload: $rawPayload,
             status: 'success',
         );
-        $values['type'] = (string) $item['type'];
         $values['received'] = 1;
         $values['user_balance_snapshot_before'] = $beforeSnapshot;
 
