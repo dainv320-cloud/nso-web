@@ -20,7 +20,6 @@ class Payment extends Model
         'status',
         'description',
         'raw_payload',
-        'user_balance_snapshot_before',
         'extra',
         'player_name',
         'received',
@@ -33,7 +32,6 @@ class Payment extends Model
             'balance' => 'integer',
             'coin_amount' => 'integer',
             'raw_payload' => 'array',
-            'user_balance_snapshot_before' => 'array',
             'received' => 'integer',
         ];
     }

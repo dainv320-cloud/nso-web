@@ -108,14 +108,13 @@ final class AdminController
         $admin = $this->requireAdmin();
         $registerBonusEnabled = $this->registerBonusEnabled();
         $search = trim((string) ($_GET['q'] ?? ''));
-        $userSelect = $this->adminUserListSelect();
         $listing = $search !== ''
             ? $this->paginateRows(
                 'select count(*) from users
                  where lower(username) like :search
                     or lower(coalesce(name, \'\')) like :search
                     or lower(coalesce(email, \'\')) like :search',
-                'select ' . $userSelect . '
+                'select id, username, name, email, status, activated, active, role, balance, tongnap, tongNapThang, tongNapTuan
                  from users
                  where lower(username) like :search
                     or lower(coalesce(name, \'\')) like :search
@@ -126,7 +125,7 @@ final class AdminController
             )
             : $this->paginateRows(
                 'select count(*) from users',
-                'select ' . $userSelect . '
+                'select id, username, name, email, status, activated, active, role, balance, tongnap, tongNapThang, tongNapTuan
                  from users
                  order by id desc'
             );
@@ -2088,23 +2087,6 @@ final class AdminController
         $schema = $this->userTableSchema();
 
         return isset($schema['role'], $schema['status'], $schema['active']);
-    }
-
-    private function adminUserListSelect(): string
-    {
-        if ($this->usesModernUserSchema()) {
-            return 'id, username, name, email, status, activated, active, role, balance, tongnap, tongNapThang, tongNapTuan';
-        }
-
-        return 'id, username, name, email, '
-            . 'case when coalesce(ban, 0) = 1 then 2 else 1 end as status, '
-            . 'coalesce(is_active, 1) as activated, '
-            . 'coalesce(is_active, 1) as active, '
-            . 'case when coalesce(type_admin, 0) > 1 then 99 when coalesce(type_admin, 0) = 1 then 1 else 0 end as role, '
-            . 'coalesce(money, 0) as balance, '
-            . 'coalesce(totalmoney, 0) as tongnap, '
-            . 'coalesce(tongnapthang, 0) as tongNapThang, '
-            . '0 as tongNapTuan';
     }
 
     private function adminLoginQuery(): string
