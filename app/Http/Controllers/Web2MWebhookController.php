@@ -385,14 +385,18 @@ class Web2MWebhookController extends Controller
     private function creditUser(User $user, float $amount, int $coinAmount): void
     {
         $amountInt = max(0, (int) round($amount));
+        $nextBalance = max(0, (int) $user->balance) + max(0, $coinAmount);
+        $nextTongNap = max(0, (int) $user->tongnap) + $amountInt;
+        $nextTongNapThang = max(0, (int) $user->tongNapThang) + $amountInt;
+        $nextTongNapTuan = max(0, (int) $user->tongNapTuan) + $amountInt;
 
         User::query()
             ->whereKey($user->getKey())
             ->update([
-                'balance' => DB::raw('GREATEST(COALESCE(balance, 0), 0) + ' . $coinAmount),
-                'tongnap' => DB::raw('GREATEST(COALESCE(tongnap, 0), 0) + ' . $amountInt),
-                'tongNapThang' => DB::raw('GREATEST(COALESCE(tongNapThang, 0), 0) + ' . $amountInt),
-                'tongNapTuan' => DB::raw('GREATEST(COALESCE(tongNapTuan, 0), 0) + ' . $amountInt),
+                'balance' => $nextBalance,
+                'tongnap' => $nextTongNap,
+                'tongNapThang' => $nextTongNapThang,
+                'tongNapTuan' => $nextTongNapTuan,
             ]);
     }
 
