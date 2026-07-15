@@ -126,7 +126,7 @@ $activeCampaign = $activeCampaign ?? null;
     </aside>
 </section>
 
-<?php if (!empty($submitted) && $bankAccount): ?>
+<?php if (!empty($submitted) && $bankAccount && $paymentContent !== '' && $qrImageUrl !== ''): ?>
     <div
         class="payment-qr-backdrop is-open"
         data-payment-qr-backdrop

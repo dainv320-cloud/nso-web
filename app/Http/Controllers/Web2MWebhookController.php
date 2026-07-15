@@ -57,6 +57,9 @@ class Web2MWebhookController extends Controller
             ], 401);
         }
 
+        $payload = [];
+        $items = [];
+
         try {
             $payload = $request->all();
             $items = $this->transactionItems($payload);
@@ -70,6 +73,7 @@ class Web2MWebhookController extends Controller
             }
         } catch (Throwable $exception) {
             $this->writePaymentLog($request, 'exception', $exception);
+            $this->markMatchedPaymentsFailedOnException($items, $payload, $exception);
 
             return response()->json([
                 'status' => false,
@@ -489,6 +493,38 @@ class Web2MWebhookController extends Controller
         ];
 
         $values['extra'] = json_encode($log, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+
+    private function markMatchedPaymentsFailedOnException(array $items, array $rawPayload, Throwable $exception): void
+    {
+        foreach ($items as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+
+            try {
+                $normalizedItem = $this->normalizeTransactionItem($item);
+
+                if (($normalizedItem['type'] ?? '') !== 'IN' || ($normalizedItem['description'] ?? '') === '') {
+                    continue;
+                }
+
+                $payment = $this->paymentFromDescription((string) $normalizedItem['description']);
+
+                if (!$payment || $this->paymentIsSuccess($payment) || !$this->paymentIsPending($payment)) {
+                    continue;
+                }
+
+                $this->markPaymentFailed(
+                    $payment,
+                    $normalizedItem,
+                    $rawPayload,
+                    'Giao dich bi loi trong luc xu ly webhook. Vui long lien he admin. Error: ' . $exception->getMessage(),
+                );
+            } catch (Throwable) {
+                // Bo qua de tranh che mat loi goc cua webhook.
+            }
+        }
     }
 
     private function paymentIsSuccess(Payment $payment): bool

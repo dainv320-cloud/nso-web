@@ -158,11 +158,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (campaignName) {
-            rateText.textContent = 'Khuyến mãi ' + campaignName + ': ' + baseRate + ' x (1 + ' + campaignBonus + '%) = ' + effectiveRate + ' coin / 1 VND.';
+            rateText.textContent = 'Khuyen mai ' + campaignName + ': ' + baseRate + ' x (1 + ' + campaignBonus + '%) = ' + effectiveRate + ' coin / 1 VND.';
             return;
         }
 
-        rateText.textContent = 'Tỷ lệ hiện tại: ' + effectiveRate + ' coin / 1 VND.';
+        rateText.textContent = 'Ty le hien tai: ' + effectiveRate + ' coin / 1 VND.';
     };
 
     amountInput.addEventListener('input', updateCoinPreview);
@@ -335,7 +335,7 @@ document.addEventListener('DOMContentLoaded', () => {
         toast.innerHTML = ''
             + '<span class="ns-toast-icon" aria-hidden="true">' + (isError ? '!' : '&#10003;') + '</span>'
             + '<strong>' + message + '</strong>'
-            + '<button type="button" class="ns-toast-close" aria-label="Đóng">&times;</button>'
+            + '<button type="button" class="ns-toast-close" aria-label="Dong">&times;</button>'
             + '<span class="ns-toast-progress" aria-hidden="true"></span>';
 
         const close = () => {
@@ -372,7 +372,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        statusText.textContent = 'Đang chờ webhook xác nhận giao dịch... Còn ' + secondsLeft + 's';
+        statusText.textContent = 'Dang kiem tra giao dich, vui long cho trong giay lat... Con ' + secondsLeft + 's';
     };
 
     const startCountdown = () => {
@@ -382,7 +382,7 @@ document.addEventListener('DOMContentLoaded', () => {
             secondsLeft -= 1;
 
             if (secondsLeft <= 0) {
-                finishPayment('Giao dịch không thành công hoặc chưa nhận được webhook.', true);
+                finishPayment('Giao dich khong thanh cong hoac chua nhan duoc webhook.', true);
                 return;
             }
 
@@ -412,19 +412,19 @@ document.addEventListener('DOMContentLoaded', () => {
             const payload = await response.json();
 
             if (payload && payload.paid) {
-                finishPayment('Nạp tiền thành công, coin đã được cộng vào tài khoản.');
+                finishPayment(payload.message || 'Nap tien thanh cong, coin da duoc cong vao tai khoan.');
                 return;
             }
 
             if (payload && payload.failed) {
-                finishPayment('Giao dịch thất bại, vui lòng kiểm tra lại nội dung và số tiền.', true);
+                finishPayment(payload.message || 'Giao dich bi loi, xin hay lien he admin.', true);
                 return;
             }
 
             renderCountdown();
         } catch (error) {
             if (statusText) {
-                statusText.textContent = 'Đang kiểm tra giao dịch, vui lòng chờ trong giây lát... Còn ' + secondsLeft + 's';
+                statusText.textContent = 'Dang kiem tra giao dich, vui long cho trong giay lat... Con ' + secondsLeft + 's';
             }
         }
 
@@ -595,4 +595,5 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
 });
+
 

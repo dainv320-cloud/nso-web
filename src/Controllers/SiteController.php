@@ -89,15 +89,19 @@ final class SiteController
         }
 
         $bankAccount = $this->activeBankAccount();
+        $paymentQr = $this->pullArrayFlash('payment_qr');
 
         View::render('payment', [
             'title' => "N\u{1EA1}p ti\u{1EC1}n",
-            'submitted' => false,
+            'submitted' => $paymentQr !== [],
             'account' => $account,
             'bankAccount' => $bankAccount,
             'amounts' => $this->depositAmounts(),
-            'paymentCode' => ($bankAccount && $account) ? $this->buildTransferContent($bankAccount, $account) : '',
-            'effectiveRate' => $bankAccount ? $this->effectiveBankRate($bankAccount) : null,
+            'amount' => isset($paymentQr['amount']) ? (int) $paymentQr['amount'] : null,
+            'paymentCode' => (string) ($paymentQr['paymentCode'] ?? (($bankAccount && $account) ? $this->buildTransferContent($bankAccount, $account) : '')),
+            'coinAmount' => isset($paymentQr['coinAmount']) ? (int) $paymentQr['coinAmount'] : 0,
+            'qrImageUrl' => (string) ($paymentQr['qrImageUrl'] ?? ''),
+            'effectiveRate' => isset($paymentQr['effectiveRate']) ? (float) $paymentQr['effectiveRate'] : ($bankAccount ? $this->effectiveBankRate($bankAccount) : null),
             'activeCampaign' => $this->activePromotionCampaign(),
         ]);
     }
@@ -162,19 +166,16 @@ final class SiteController
             ], 500);
         }
 
-        View::render('payment', [
-            'title' => "N\u{1EA1}p ti\u{1EC1}n",
-            'submitted' => true,
-            'account' => $account,
-            'bankAccount' => $bankAccount,
-            'amounts' => $amounts,
+        $_SESSION['payment_qr'] = [
             'amount' => $amount,
             'paymentCode' => $transferContent,
             'coinAmount' => $coinAmount,
             'qrImageUrl' => $qrImageUrl,
             'effectiveRate' => $effectiveRate,
-            'activeCampaign' => $activeCampaign,
-        ]);
+        ];
+
+        header('Location: /payment');
+        exit;
     }
 
     public function paymentStatus(): never
@@ -235,11 +236,13 @@ final class SiteController
                 );
             $failed = $payment
                 && strtolower((string) ($payment['status'] ?? '')) === 'failed';
+            $message = $this->paymentStatusMessage($payment ?: null, $paid, $failed);
 
             Response::json([
                 'status' => true,
                 'paid' => $paid,
                 'failed' => $failed,
+                'message' => $message,
                 'payment_status' => $payment['status'] ?? ($paid ? 'success' : 'pending'),
                 'payment' => $payment ?: null,
             ]);
@@ -1176,6 +1179,34 @@ final class SiteController
         unset($_SESSION[$key]);
 
         return is_array($value) ? $value : [];
+    }
+
+    private function paymentStatusMessage(?array $payment, bool $paid, bool $failed): string
+    {
+        if ($paid) {
+            return 'Nap tien thanh cong, coin da duoc cong vao tai khoan.';
+        }
+
+        if (!$failed || !$payment) {
+            return 'Dang cho webhook xac nhan giao dich.';
+        }
+
+        $extra = json_decode((string) ($payment['extra'] ?? ''), true);
+        $reason = '';
+
+        if (is_array($extra) && !empty($extra['web2m_reason'])) {
+            $reason = trim((string) $extra['web2m_reason']);
+        }
+
+        if ($reason === '') {
+            $reason = trim((string) ($payment['description'] ?? ''));
+        }
+
+        if ($reason !== '') {
+            return 'Giao dich bi loi, xin hay lien he admin. Chi tiet: ' . $reason;
+        }
+
+        return 'Giao dich bi loi, xin hay lien he admin.';
     }
 
     private function forgotPasswordStep(): string
