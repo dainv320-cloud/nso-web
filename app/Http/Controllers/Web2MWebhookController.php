@@ -468,7 +468,6 @@ class Web2MWebhookController extends Controller
         $values = [
             'description' => $this->paymentDescription($description),
             'status' => $status,
-            'bank' => isset($item['bank']) ? (string) $item['bank'] : null,
         ];
 
         $this->appendPaymentLog($values, $item, $rawPayload, $status, $reason);
