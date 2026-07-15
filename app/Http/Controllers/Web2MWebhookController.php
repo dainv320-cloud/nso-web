@@ -209,9 +209,10 @@ class Web2MWebhookController extends Controller
                     return;
                 }
 
+                $beforeSnapshot = $this->userBalanceSnapshot($user);
                 $coinAmount = $this->paymentCoinAmount($payment, $amount);
                 $this->creditUser($user, $amount, $coinAmount);
-                $this->markPaymentSuccess($payment, $normalizedItem, $rawPayload, $type);
+                $this->markPaymentSuccess($payment, $normalizedItem, $rawPayload, $type, $beforeSnapshot);
             });
         } catch (QueryException $exception) {
             if (!$this->isDuplicateTransaction($exception)) {
@@ -372,7 +373,13 @@ class Web2MWebhookController extends Controller
         ])->save();
     }
 
-    private function markPaymentSuccess(Payment $payment, array $item, array $rawPayload, string $type): void
+    private function markPaymentSuccess(
+        Payment $payment,
+        array $item,
+        array $rawPayload,
+        string $type,
+        array $beforeSnapshot,
+    ): void
     {
         $values = [
             'description' => $this->paymentDescription((string) ($item['description'] ?? $item['MoTa'] ?? '')),
@@ -392,6 +399,10 @@ class Web2MWebhookController extends Controller
 
         if (Schema::hasColumn('payments', 'received')) {
             $values['received'] = 1;
+        }
+
+        if (Schema::hasColumn('payments', 'user_balance_snapshot_before')) {
+            $values['user_balance_snapshot_before'] = $beforeSnapshot;
         }
 
         $this->appendPaymentLog($values, $item, $rawPayload, 'success');
@@ -526,6 +537,17 @@ class Web2MWebhookController extends Controller
         }
 
         return (int) floor($amount);
+    }
+
+    private function userBalanceSnapshot(User $user): array
+    {
+        return [
+            'balance' => (int) $user->balance,
+            'tongnap' => (int) $user->tongnap,
+            'tongNapThang' => (int) $user->tongNapThang,
+            'tongNapTuan' => (int) $user->tongNapTuan,
+            'captured_at' => now()->toDateTimeString(),
+        ];
     }
 
     private function paymentCodeColumn(): string

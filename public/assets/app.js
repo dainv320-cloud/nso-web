@@ -301,7 +301,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let pollingTimer = null;
     let countdownTimer = null;
     let isResolved = false;
-    let secondsLeft = 60;
+    let secondsLeft = 120;
 
     const closeQr = () => {
         backdrop.classList.remove('is-open');
