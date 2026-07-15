@@ -8,13 +8,38 @@ use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 use Throwable;
 
 class Web2MWebhookController extends Controller
 {
     private const ACCESS_TOKEN = '6AFBE818-C736-D46B-36A4-6A435A9C1887';
     private const MIN_TRANSACTION_DATE = '2026-07-11';
+    private const TRANSACTION_DATE_FIELDS = [
+        'NgayGiaoDich',
+        'NgayGD',
+        'Ngay',
+        'NgayHieuLuc',
+        'NgayGioGiaoDich',
+        'ThoiGianGiaoDich',
+        'ThoiGian',
+        'transaction_date',
+        'transactionDate',
+        'created_at',
+        'date',
+        'time',
+    ];
+    private const TRANSACTION_DATE_FORMATS = [
+        'd/m/Y H:i:s',
+        'd/m/Y H:i',
+        'd-m-Y H:i:s',
+        'd-m-Y H:i',
+        'd/m/Y',
+        'd-m-Y',
+        'Y-m-d H:i:s',
+        'Y-m-d H:i',
+        'Y-m-d',
+        \DateTimeInterface::ATOM,
+    ];
     private const ACCESS_TOKENS = [
         self::ACCESS_TOKEN,
         'bd89c64c4987d9814b9a37dcd885b91a5501d00a3d18be7ccb325354cace28c1',
@@ -108,17 +133,19 @@ class Web2MWebhookController extends Controller
             'method' => $request->method(),
             'url' => $request->fullUrl(),
             'ip' => $request->ip(),
-            'expected_tokens' => self::ACCESS_TOKENS,
-            'received_token' => $this->receivedToken($request),
-            'headers' => $request->headers->all(),
-            'server_authorization' => [
+            'payload' => $request->all(),
+        ];
+
+        if ($status !== 'authorized' || $exception) {
+            $entry['received_token'] = $this->receivedToken($request);
+            $entry['headers'] = $request->headers->all();
+            $entry['server_authorization'] = [
                 'HTTP_AUTHORIZATION' => $_SERVER['HTTP_AUTHORIZATION'] ?? null,
                 'REDIRECT_HTTP_AUTHORIZATION' => $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? null,
                 'Authorization' => $_SERVER['Authorization'] ?? null,
-            ],
-            'payload' => $request->all(),
-            'raw_body' => $request->getContent(),
-        ];
+            ];
+            $entry['raw_body'] = $request->getContent();
+        }
 
         if ($exception) {
             $entry['exception'] = [
@@ -140,11 +167,11 @@ class Web2MWebhookController extends Controller
     private function transactionItems(array $payload): array
     {
         if (isset($payload['data']['ChiTietGiaoDich']) && is_array($payload['data']['ChiTietGiaoDich'])) {
-            return $payload['data']['ChiTietGiaoDich'];
+            return array_slice($payload['data']['ChiTietGiaoDich'], 0, 10);
         }
 
         if (isset($payload['data']) && is_array($payload['data'])) {
-            return $payload['data'];
+            return array_slice($payload['data'], 0, 10);
         }
 
         // Ho tro payload don de tien test thu cong bang Postman/curl.
@@ -154,49 +181,64 @@ class Web2MWebhookController extends Controller
     private function handleTransaction(array $item, array $rawPayload): void
     {
         $normalizedItem = $this->normalizeTransactionItem($item);
-        $web2mTransactionId = $normalizedItem['transaction_id'];
-        $amount = $normalizedItem['amount'];
-        $description = $normalizedItem['description'];
-        $type = $normalizedItem['type'];
 
         if ($this->isBeforeMinimumTransactionDate($normalizedItem)) {
             return;
         }
 
-        if ($web2mTransactionId === '' || $amount <= 0 || $description === '') {
-            $this->logFailedWebhook($web2mTransactionId, $amount, $description, $rawPayload, 'Du lieu giao dich Web2M khong hop le.');
+        if (!$this->hasValidTransactionData($normalizedItem)) {
+            $this->logFailedWebhook(
+                $normalizedItem['transaction_id'],
+                $normalizedItem['amount'],
+                $normalizedItem['description'],
+                $rawPayload,
+                'Du lieu giao dich Web2M khong hop le.',
+            );
 
             return;
         }
 
-        if ($type !== 'IN') {
-            $this->logFailedWebhook($web2mTransactionId, $amount, $description, $rawPayload, 'Bo qua giao dich khong phai tien vao.');
+        if ($normalizedItem['type'] !== 'IN') {
+            $this->logFailedWebhook(
+                $normalizedItem['transaction_id'],
+                $normalizedItem['amount'],
+                $normalizedItem['description'],
+                $rawPayload,
+                'Bo qua giao dich khong phai tien vao.',
+            );
 
             return;
         }
 
         try {
-            DB::transaction(function () use ($normalizedItem, $rawPayload, $web2mTransactionId, $amount, $description, $type): void {
-                $payment = $this->paymentFromDescription($description);
+            DB::transaction(function () use ($normalizedItem, $rawPayload): void {
+                $payment = $this->paymentFromDescription($normalizedItem['description']);
 
                 if (!$payment) {
-                    $this->logFailedWebhook($web2mTransactionId, $amount, $description, $rawPayload, 'Khong tim thay giao dich pending khop noi dung chuyen khoan.');
+                    $this->logFailedWebhook(
+                        $normalizedItem['transaction_id'],
+                        $normalizedItem['amount'],
+                        $normalizedItem['description'],
+                        $rawPayload,
+                        'Khong tim thay giao dich pending khop noi dung chuyen khoan.',
+                    );
 
                     return;
                 }
 
-                if ($this->paymentIsSuccess($payment)) {
-                    return;
-                }
-
-                if (!$this->paymentIsPending($payment)) {
+                if ($this->paymentIsSuccess($payment) || !$this->paymentIsPending($payment)) {
                     return;
                 }
 
                 $expectedAmount = (float) $payment->amount;
 
-                if (abs($expectedAmount - $amount) > 0.01) {
-                    $this->markPaymentFailed($payment, $normalizedItem, $rawPayload, 'So tien chuyen khoan khong khop. Expected: ' . $expectedAmount . ', received: ' . $amount);
+                if (abs($expectedAmount - $normalizedItem['amount']) > 0.01) {
+                    $this->markPaymentFailed(
+                        $payment,
+                        $normalizedItem,
+                        $rawPayload,
+                        'So tien chuyen khoan khong khop. Expected: ' . $expectedAmount . ', received: ' . $normalizedItem['amount'],
+                    );
 
                     return;
                 }
@@ -210,15 +252,22 @@ class Web2MWebhookController extends Controller
                 }
 
                 $beforeSnapshot = $this->userBalanceSnapshot($user);
-                $coinAmount = $this->paymentCoinAmount($payment, $amount);
-                $this->creditUser($user, $amount, $coinAmount);
-                $this->markPaymentSuccess($payment, $normalizedItem, $rawPayload, $type, $beforeSnapshot);
+                $coinAmount = $this->paymentCoinAmount($payment, $normalizedItem['amount']);
+                $this->creditUser($user, $normalizedItem['amount'], $coinAmount);
+                $this->markPaymentSuccess($payment, $normalizedItem, $rawPayload, $beforeSnapshot);
             });
         } catch (QueryException $exception) {
             if (!$this->isDuplicateTransaction($exception)) {
                 throw $exception;
             }
         }
+    }
+
+    private function hasValidTransactionData(array $normalizedItem): bool
+    {
+        return $normalizedItem['transaction_id'] !== ''
+            && $normalizedItem['amount'] > 0
+            && $normalizedItem['description'] !== '';
     }
 
     private function normalizeTransactionItem(array $item): array
@@ -241,7 +290,6 @@ class Web2MWebhookController extends Controller
             'type' => $type,
             'bank' => $item['bank'] ?? $item['NganHang'] ?? null,
             'transaction_date' => $this->transactionDateFromItem($item),
-            'raw_item' => $item,
         ];
     }
 
@@ -267,7 +315,7 @@ class Web2MWebhookController extends Controller
 
     private function transactionDateFromItem(array $item): ?\DateTimeImmutable
     {
-        foreach ($this->transactionDateFields() as $field) {
+        foreach (self::TRANSACTION_DATE_FIELDS as $field) {
             if (!isset($item[$field])) {
                 continue;
             }
@@ -282,24 +330,6 @@ class Web2MWebhookController extends Controller
         return null;
     }
 
-    private function transactionDateFields(): array
-    {
-        return [
-            'NgayGiaoDich',
-            'NgayGD',
-            'Ngay',
-            'NgayHieuLuc',
-            'NgayGioGiaoDich',
-            'ThoiGianGiaoDich',
-            'ThoiGian',
-            'transaction_date',
-            'transactionDate',
-            'created_at',
-            'date',
-            'time',
-        ];
-    }
-
     private function parseTransactionDate(mixed $value): ?\DateTimeImmutable
     {
         $value = trim((string) $value);
@@ -308,20 +338,7 @@ class Web2MWebhookController extends Controller
             return null;
         }
 
-        $formats = [
-            'd/m/Y H:i:s',
-            'd/m/Y H:i',
-            'd-m-Y H:i:s',
-            'd-m-Y H:i',
-            'd/m/Y',
-            'd-m-Y',
-            'Y-m-d H:i:s',
-            'Y-m-d H:i',
-            'Y-m-d',
-            \DateTimeInterface::ATOM,
-        ];
-
-        foreach ($formats as $format) {
+        foreach (self::TRANSACTION_DATE_FORMATS as $format) {
             $date = \DateTimeImmutable::createFromFormat('!' . $format, $value);
             $errors = \DateTimeImmutable::getLastErrors();
 
@@ -343,10 +360,8 @@ class Web2MWebhookController extends Controller
             return null;
         }
 
-        $codeColumn = $this->paymentCodeColumn();
-
         return Payment::query()
-            ->whereIn($codeColumn, $codes)
+            ->whereIn('transaction_id', $codes)
             ->lockForUpdate()
             ->orderByDesc('id')
             ->first();
@@ -365,65 +380,49 @@ class Web2MWebhookController extends Controller
 
     private function creditUser(User $user, float $amount, int $coinAmount): void
     {
-        $user->forceFill([
-            'balance' => max(0, (int) $user->balance) + $coinAmount,
-            'tongnap' => max(0, (int) $user->tongnap) + (int) $amount,
-            'tongNapThang' => max(0, (int) $user->tongNapThang) + (int) $amount,
-            'tongNapTuan' => max(0, (int) $user->tongNapTuan) + (int) $amount,
-        ])->save();
+        $amountInt = max(0, (int) round($amount));
+
+        User::query()
+            ->whereKey($user->getKey())
+            ->update([
+                'balance' => DB::raw('GREATEST(COALESCE(balance, 0), 0) + ' . $coinAmount),
+                'tongnap' => DB::raw('GREATEST(COALESCE(tongnap, 0), 0) + ' . $amountInt),
+                'tongNapThang' => DB::raw('GREATEST(COALESCE(tongNapThang, 0), 0) + ' . $amountInt),
+                'tongNapTuan' => DB::raw('GREATEST(COALESCE(tongNapTuan, 0), 0) + ' . $amountInt),
+            ]);
     }
 
     private function markPaymentSuccess(
         Payment $payment,
         array $item,
         array $rawPayload,
-        string $type,
         array $beforeSnapshot,
     ): void
     {
-        $values = [
-            'description' => $this->paymentDescription((string) ($item['description'] ?? $item['MoTa'] ?? '')),
-        ];
+        $values = $this->basePaymentValues(
+            description: (string) ($item['description'] ?? $item['MoTa'] ?? ''),
+            item: $item,
+            rawPayload: $rawPayload,
+            status: 'success',
+        );
+        $values['type'] = (string) $item['type'];
+        $values['received'] = 1;
+        $values['user_balance_snapshot_before'] = $beforeSnapshot;
 
-        if (Schema::hasColumn('payments', 'status')) {
-            $values['status'] = 'success';
-        }
-
-        if (Schema::hasColumn('payments', 'bank')) {
-            $values['bank'] = isset($item['bank']) ? (string) $item['bank'] : null;
-        }
-
-        if (Schema::hasColumn('payments', 'type')) {
-            $values['type'] = $this->paymentTypeValue($type);
-        }
-
-        if (Schema::hasColumn('payments', 'received')) {
-            $values['received'] = 1;
-        }
-
-        if (Schema::hasColumn('payments', 'user_balance_snapshot_before')) {
-            $values['user_balance_snapshot_before'] = $beforeSnapshot;
-        }
-
-        $this->appendPaymentLog($values, $item, $rawPayload, 'success');
         $payment->forceFill($values)->save();
     }
 
     private function markPaymentFailed(Payment $payment, array $item, array $rawPayload, string $reason): void
     {
-        $values = [
-            'description' => $this->paymentDescription((string) ($item['description'] ?? $item['MoTa'] ?? '') . ' | ' . $reason),
-        ];
+        $values = $this->basePaymentValues(
+            description: (string) ($item['description'] ?? $item['MoTa'] ?? '') . ' | ' . $reason,
+            item: $item,
+            rawPayload: $rawPayload,
+            status: 'failed',
+            reason: $reason,
+        );
+        $values['received'] = 0;
 
-        if (Schema::hasColumn('payments', 'status')) {
-            $values['status'] = 'failed';
-        }
-
-        if (Schema::hasColumn('payments', 'received')) {
-            $values['received'] = 0;
-        }
-
-        $this->appendPaymentLog($values, $item, $rawPayload, 'failed', $reason);
         $payment->forceFill($values)->save();
     }
 
@@ -434,51 +433,43 @@ class Web2MWebhookController extends Controller
         array $payload,
         string $reason,
     ): void {
-        $codeColumn = $this->paymentCodeColumn();
         $transactionId = $web2mTransactionId !== ''
             ? 'web2m-' . $web2mTransactionId
             : 'web2m-invalid-' . sha1(json_encode($payload) . microtime(true));
 
-        $values = [
-            $codeColumn => $transactionId,
+        $values = $this->basePaymentValues(
+            description: $description . ' | ' . $reason,
+            item: [],
+            rawPayload: $payload,
+            status: 'failed',
+            reason: $reason,
+        ) + [
+            'transaction_id' => $transactionId,
             'amount' => max($amount, 0),
-            'description' => $this->paymentDescription($description . ' | ' . $reason),
         ];
 
-        if (Schema::hasColumn('payments', 'currency_id')) {
-            $values['currency_id'] = 'VND';
-        }
-
-        if (Schema::hasColumn('payments', 'player_name')) {
-            $values['player_name'] = '';
-        }
-
-        if (Schema::hasColumn('payments', 'status')) {
-            $values['status'] = 'failed';
-        }
-
-        if (Schema::hasColumn('payments', 'received')) {
-            $values['received'] = 0;
-        }
-
-        if (Schema::hasColumn('payments', 'type')) {
-            $values['type'] = $this->paymentTypeValue('IN');
-        }
-
-        if (Schema::hasColumn('payments', 'coin_amount')) {
-            $values['coin_amount'] = 0;
-        }
-
-        if (Schema::hasColumn('payments', 'balance')) {
-            $values['balance'] = 0;
-        }
-
-        $this->appendPaymentLog($values, [], $payload, 'failed', $reason);
-
         Payment::query()->updateOrCreate(
-            [$codeColumn => $transactionId],
+            ['transaction_id' => $transactionId],
             $values,
         );
+    }
+
+    private function basePaymentValues(
+        string $description,
+        array $item,
+        array $rawPayload,
+        string $status,
+        ?string $reason = null,
+    ): array {
+        $values = [
+            'description' => $this->paymentDescription($description),
+            'status' => $status,
+            'bank' => isset($item['bank']) ? (string) $item['bank'] : null,
+        ];
+
+        $this->appendPaymentLog($values, $item, $rawPayload, $status, $reason);
+
+        return $values;
     }
 
     private function paymentDescription(string $description): string
@@ -497,13 +488,8 @@ class Web2MWebhookController extends Controller
             'web2m_payload' => $rawPayload,
         ];
 
-        if (Schema::hasColumn('payments', 'raw_payload')) {
-            $values['raw_payload'] = $log;
-        }
-
-        if (Schema::hasColumn('payments', 'extra')) {
-            $values['extra'] = json_encode($log, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-        }
+        $values['raw_payload'] = $log;
+        $values['extra'] = json_encode($log, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
 
     private function paymentIsSuccess(Payment $payment): bool
@@ -514,25 +500,16 @@ class Web2MWebhookController extends Controller
 
     private function paymentIsPending(Payment $payment): bool
     {
-        if (Schema::hasColumn('payments', 'status')) {
-            return in_array(strtolower((string) $payment->status), ['pending', 'pedding'], true);
-        }
-
-        return !Schema::hasColumn('payments', 'received') || (int) $payment->received === 0;
-    }
-
-    private function paymentTypeValue(string $type): string|int
-    {
-        return Schema::hasColumn('payments', 'transaction_id') ? $type : 1;
+        return in_array(strtolower((string) $payment->status), ['pending', 'pedding'], true);
     }
 
     private function paymentCoinAmount(Payment $payment, float $amount): int
     {
-        if (Schema::hasColumn('payments', 'coin_amount') && (int) $payment->coin_amount > 0) {
+        if ((int) $payment->coin_amount > 0) {
             return (int) $payment->coin_amount;
         }
 
-        if (Schema::hasColumn('payments', 'balance') && (int) $payment->balance > 0) {
+        if ((int) $payment->balance > 0) {
             return (int) $payment->balance;
         }
 
@@ -548,11 +525,6 @@ class Web2MWebhookController extends Controller
             'tongNapTuan' => (int) $user->tongNapTuan,
             'captured_at' => now()->toDateTimeString(),
         ];
-    }
-
-    private function paymentCodeColumn(): string
-    {
-        return Schema::hasColumn('payments', 'transaction_id') ? 'transaction_id' : 'trans_id';
     }
 
     private function isDuplicateTransaction(QueryException $exception): bool
