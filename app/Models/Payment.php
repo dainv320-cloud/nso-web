@@ -10,7 +10,6 @@ class Payment extends Model
         'user_id',
         'bank_account_id',
         'currency_id',
-        'transaction_id',
         'trans_id',
         'bank',
         'type',

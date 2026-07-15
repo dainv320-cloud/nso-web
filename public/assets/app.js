@@ -6,6 +6,8 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
     }
 
+    return;
+
     const isDismissed = window.localStorage.getItem(popupStorageKey) === '1';
     const deadlineRaw = backdrop.dataset.launchPopupDeadline || '';
     const deadline = deadlineRaw ? new Date(deadlineRaw) : null;

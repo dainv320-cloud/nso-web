@@ -361,7 +361,7 @@ class Web2MWebhookController extends Controller
         }
 
         return Payment::query()
-            ->whereIn('transaction_id', $codes)
+            ->whereIn('trans_id', $codes)
             ->lockForUpdate()
             ->orderByDesc('id')
             ->first();
@@ -444,12 +444,12 @@ class Web2MWebhookController extends Controller
             status: 'failed',
             reason: $reason,
         ) + [
-            'transaction_id' => $transactionId,
+            'trans_id' => $transactionId,
             'amount' => max($amount, 0),
         ];
 
         Payment::query()->updateOrCreate(
-            ['transaction_id' => $transactionId],
+            ['trans_id' => $transactionId],
             $values,
         );
     }
@@ -488,7 +488,6 @@ class Web2MWebhookController extends Controller
             'web2m_payload' => $rawPayload,
         ];
 
-        $values['raw_payload'] = $log;
         $values['extra'] = json_encode($log, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
 
@@ -534,6 +533,7 @@ class Web2MWebhookController extends Controller
 
         return $sqlState === '23505'
             || str_contains($message, 'payments_transaction_id_unique')
+            || str_contains($message, 'payments_trans_id_unique')
             || str_contains($message, 'Duplicate entry');
     }
 }
