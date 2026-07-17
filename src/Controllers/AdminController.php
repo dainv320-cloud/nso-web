@@ -270,14 +270,19 @@ final class AdminController
         }
 
         $status = $this->userStatusFromRequest();
+        $existingUser = $id > 0 ? $this->findRow('users', $id) : null;
+
+        if ($id > 0 && !$existingUser) {
+            $this->redirectWithFlash('/admin/users', "Kh\u{00F4}ng t\u{00EC}m th\u{1EA5}y user.", 'error');
+        }
 
         $data = [
             'name' => trim((string) ($_POST['name'] ?? $username)) ?: $username,
             'username' => $username,
             'email' => $email !== '' ? $email : null,
             'status' => $status,
-            'activated' => $status === 1 ? 1 : 0,
-            'active' => $status === 1 ? 1 : 0,
+            'activated' => $id > 0 ? (int) ($existingUser['activated'] ?? 0) : ($status === 1 ? 1 : 0),
+            'active' => $id > 0 ? (int) ($existingUser['active'] ?? 0) : ($status === 1 ? 1 : 0),
             'role' => $this->userRoleFromRequest($id),
             'balance' => $this->moneyIntFromRequest('balance'),
             'tongnap' => $this->moneyIntFromRequest('tongnap'),
