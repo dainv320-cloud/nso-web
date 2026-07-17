@@ -611,7 +611,7 @@ final class SiteController
                 View::render('home', $this->homePayload([
                     'title' => "\u{0110}\u{0103}ng nh\u{1EAD}p t\u{00E0}i kho\u{1EA3}n Ninja School Blue",
                     'authModal' => 'login',
-                    'loginError' => "T\u{00E0}i kho\u{1EA3}n \u{0111}ang b\u{1ECB} kh\u{00F3}a ho\u{1EB7}c ch\u{01B0}a \u{0111}\u{01B0}\u{1EE3}c k\u{00ED}ch ho\u{1EA1}t.",
+                    'loginError' => "T\u{00E0}i kho\u{1EA3}n kh\u{00F4}ng \u{1EDF} tr\u{1EA1}ng th\u{00E1}i cho ph\u{00E9}p \u{0111}\u{0103}ng nh\u{1EAD}p.",
                 ]), 403);
             }
         } catch (Throwable) {
@@ -712,7 +712,7 @@ final class SiteController
 
             $statement = $connection->prepare(
                 'insert into users (name, username, email, password, status, activated, active, role, balance, tongnap, tongNapThang, tongNapTuan, created_at, updated_at)
-                 values (:name, :username, :email, :password, 1, 1, 1, 0, :balance, 0, 0, 0, now(), now())'
+                 values (:name, :username, :email, :password, 1, 0, 0, 0, :balance, 0, 0, 0, now(), now())'
             );
             $statement->execute([
                 'name' => null,
@@ -1358,15 +1358,13 @@ final class SiteController
 
     private function accountProfileQuery(): string
     {
-        return 'select id, name, username, email, status, activated, active, role, balance, tongnap, tongNapThang, tongNapTuan, case when status <> 1 or activated = 0 or active = 0 then 1 else 0 end as ban, created_at, updated_at from users where username = :username limit 1';
+        return 'select id, name, username, email, status, activated, active, role, balance, tongnap, tongNapThang, tongNapTuan, case when status <> 1 then 1 else 0 end as ban, created_at, updated_at from users where username = :username limit 1';
     }
 
     private function isAccountAccessible(array $account): bool
     {
         if ($this->usesModernUserSchema()) {
-            return (int) ($account['status'] ?? 0) === 1
-                && $this->databaseBool($account['activated'] ?? true)
-                && $this->databaseBool($account['active'] ?? true);
+            return (int) ($account['status'] ?? 0) === 1;
         }
 
         return !$this->databaseBool($account['ban'] ?? false)

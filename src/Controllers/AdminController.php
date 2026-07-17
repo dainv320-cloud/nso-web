@@ -165,8 +165,6 @@ final class AdminController
                 ['key' => 'name', 'label' => 'Name'],
                 ['key' => 'email', 'label' => 'Email'],
                 ['key' => 'status', 'label' => 'Status', 'format' => 'user_status'],
-                ['key' => 'activated', 'label' => 'Activated', 'format' => 'bool'],
-                ['key' => 'active', 'label' => 'Active', 'format' => 'bool'],
                 ['key' => 'role', 'label' => 'Role', 'format' => 'admin_role'],
                 ['key' => 'balance', 'label' => 'Balance', 'format' => 'money'],
                 ['key' => 'tongnap', 'label' => 'Tong nap', 'format' => 'money'],
@@ -217,8 +215,6 @@ final class AdminController
                 ['name' => 'email', 'label' => 'Email', 'type' => 'email'],
                 ['name' => 'password', 'label' => $id ? 'Password moi, bo trong neu khong doi' : 'Password', 'type' => 'password', 'required' => !$id],
                 ['name' => 'status', 'label' => 'Status', 'type' => 'select', 'options' => $this->userStatusOptions()],
-                ['name' => 'activated', 'label' => 'Activated', 'type' => 'checkbox', 'checked' => !$id],
-                ['name' => 'active', 'label' => 'Active', 'type' => 'checkbox', 'checked' => !$id],
                 ['name' => 'role', 'label' => 'Role', 'type' => 'select', 'options' => $this->userRoleOptions()],
                 ['name' => 'balance', 'label' => 'Balance', 'type' => 'money'],
                 ['name' => 'tongnap', 'label' => 'Tong nap', 'type' => 'money'],
@@ -273,13 +269,15 @@ final class AdminController
             $this->redirectWithFlash('/admin/users/create', "M\u{1EAD}t kh\u{1EA9}u user m\u{1EDB}i t\u{1ED1}i thi\u{1EC3}u 6 k\u{00FD} t\u{1EF1}.", 'error');
         }
 
+        $status = $this->userStatusFromRequest();
+
         $data = [
             'name' => trim((string) ($_POST['name'] ?? $username)) ?: $username,
             'username' => $username,
             'email' => $email !== '' ? $email : null,
-            'status' => $this->userStatusFromRequest(),
-            'activated' => isset($_POST['activated']) ? 1 : 0,
-            'active' => isset($_POST['active']) ? 1 : 0,
+            'status' => $status,
+            'activated' => $status === 1 ? 1 : 0,
+            'active' => $status === 1 ? 1 : 0,
             'role' => $this->userRoleFromRequest($id),
             'balance' => $this->moneyIntFromRequest('balance'),
             'tongnap' => $this->moneyIntFromRequest('tongnap'),
@@ -1554,9 +1552,7 @@ final class AdminController
 
     private function isAdminRole(array $account): bool
     {
-        $role = $this->accountRole($account);
-
-        return in_array($role, [self::ROLE_ADMIN, self::ROLE_COLLABORATOR], true);
+        return $this->accountRole($account) === self::ROLE_ADMIN;
     }
 
     private function currentAdminPath(): string
@@ -1650,9 +1646,7 @@ final class AdminController
     private function isUserAccessible(array $account): bool
     {
         if ($this->usesModernUserSchema()) {
-            return (int) ($account['status'] ?? 0) === 1
-                && $this->databaseBool($account['activated'] ?? 1)
-                && $this->databaseBool($account['active'] ?? 1);
+            return (int) ($account['status'] ?? 0) === 1;
         }
 
         return !$this->databaseBool($account['ban'] ?? 0)
