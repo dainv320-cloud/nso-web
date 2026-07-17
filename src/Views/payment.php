@@ -29,7 +29,6 @@ $activeCampaign = $activeCampaign ?? null;
         <?php if ($bankAccount && $account): ?>
             <div class="alert success">
                 Tài khoản nạp: <strong><?= e($account['username'] ?? '') ?></strong>
-                <br>
             </div>
         <?php endif; ?>
 
@@ -55,7 +54,7 @@ $activeCampaign = $activeCampaign ?? null;
                     list="payment-amount-suggestions"
                     data-money-input
                     value="<?= e(number_format($selectedAmount, 0, ',', '.')) ?>"
-                    placeholder="Ví dụ: 100000"
+                    placeholder="Ví dụ: 100.000"
                     required
                 >
                 <datalist id="payment-amount-suggestions">
@@ -131,6 +130,7 @@ $activeCampaign = $activeCampaign ?? null;
         class="payment-qr-backdrop is-open"
         data-payment-qr-backdrop
         data-payment-status-url="/payment/status?code=<?= e(rawurlencode($paymentContent)) ?>"
+        data-payment-cancel-url="/payment/cancel"
         data-payment-code="<?= e($paymentContent) ?>"
         aria-hidden="false"
     >
@@ -211,12 +211,14 @@ $activeCampaign = $activeCampaign ?? null;
 
             var statusText = backdrop.querySelector('[data-payment-status-text]');
             var statusUrl = backdrop.getAttribute('data-payment-status-url') || '';
-            var secondsLeft = 120;
+            var cancelUrl = backdrop.getAttribute('data-payment-cancel-url') || '';
+            var paymentCode = backdrop.getAttribute('data-payment-code') || '';
+            var secondsLeft = 180;
             var resolved = false;
             var pollTimer = null;
             var countdownTimer = null;
-            var timeoutNotified = false;
             var backgroundDeadline = null;
+            var cancelRequested = false;
 
             function closeQr(stopPolling) {
                 backdrop.classList.remove('is-open');
@@ -329,20 +331,83 @@ $activeCampaign = $activeCampaign ?? null;
                 xhr.send();
             }
 
+            function cancelPayment(callback) {
+                if (!cancelUrl || !paymentCode || cancelRequested || resolved) {
+                    if (typeof callback === 'function') {
+                        callback();
+                    }
+                    return;
+                }
+
+                cancelRequested = true;
+
+                var xhr = new XMLHttpRequest();
+                xhr.open('POST', cancelUrl, true);
+                xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded; charset=UTF-8');
+                xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+                xhr.setRequestHeader('Accept', 'application/json');
+                xhr.onreadystatechange = function () {
+                    if (xhr.readyState !== 4) {
+                        return;
+                    }
+
+                    if (typeof callback === 'function') {
+                        callback(xhr.status);
+                    }
+                };
+                xhr.send('code=' + encodeURIComponent(paymentCode));
+            }
+
+            function cancelAndClose() {
+                if (resolved) {
+                    closeQr();
+                    return;
+                }
+
+                cancelPayment(function () {
+                    resolved = true;
+
+                    if (statusText) {
+                        statusText.textContent = 'Giao dịch đã được hủy.';
+                    }
+
+                    closeQr();
+                    toast('Đã hủy giao dịch nạp tiền.', true);
+                });
+            }
+
             renderCountdown();
             countdownTimer = window.setInterval(function () {
                 secondsLeft -= 1;
 
                 if (secondsLeft <= 0) {
-                    timeoutNotified = true;
                     backgroundDeadline = Date.now() + 240000;
                     closeQr(false);
-                    toast('Giao dịch chưa được xác nhận sau 120 giây, hệ thống sẽ tiếp tục kiểm tra trong nền.', true);
+                    toast('Giao dịch chưa được xác nhận sau 180 giây, hệ thống sẽ tiếp tục kiểm tra trong nền.', true);
                     return;
                 }
 
                 renderCountdown();
             }, 1000);
+
+            backdrop.querySelectorAll('[data-payment-qr-close]').forEach(function (button) {
+                button.addEventListener('click', function (event) {
+                    event.preventDefault();
+                    cancelAndClose();
+                });
+            });
+
+            backdrop.addEventListener('click', function (event) {
+                if (event.target === backdrop) {
+                    cancelAndClose();
+                }
+            });
+
+            document.addEventListener('keydown', function (event) {
+                if (event.key === 'Escape' && backdrop.classList.contains('is-open')) {
+                    cancelAndClose();
+                }
+            });
 
             poll();
         });

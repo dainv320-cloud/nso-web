@@ -255,6 +255,122 @@ final class SiteController
         }
     }
 
+    public function cancelPayment(): never
+    {
+        if (!$this->paymentEnabled()) {
+            $this->notFound();
+        }
+
+        $user = $_SESSION['user'] ?? null;
+
+        if (!$user || empty($user['username'])) {
+            Response::json([
+                'status' => false,
+                'message' => 'Unauthorized',
+            ], 401);
+        }
+
+        $paymentCode = strtoupper(trim((string) ($_POST['code'] ?? '')));
+
+        if ($paymentCode === '') {
+            Response::json([
+                'status' => false,
+                'message' => 'Missing payment code',
+            ], 422);
+        }
+
+        try {
+            $account = $this->accountForUsername((string) $user['username']);
+
+            if (!$account) {
+                Response::json([
+                    'status' => false,
+                    'message' => 'Account not found',
+                ], 404);
+            }
+
+            $paymentCodeColumn = $this->paymentCodeColumn();
+            $statement = Database::connection()->prepare(
+                'select *
+                 from payments
+                 where user_id = :user_id
+                   and ' . $paymentCodeColumn . ' = :payment_code
+                 order by id desc
+                 limit 1'
+            );
+            $statement->execute([
+                'user_id' => (int) $account['id'],
+                'payment_code' => $paymentCode,
+            ]);
+            $payment = $statement->fetch();
+
+            if (!$payment) {
+                Response::json([
+                    'status' => false,
+                    'message' => 'Payment not found',
+                ], 404);
+            }
+
+            $currentStatus = strtolower((string) ($payment['status'] ?? ''));
+
+            if ($currentStatus === 'success' || (int) ($payment['received'] ?? 0) === 1) {
+                Response::json([
+                    'status' => false,
+                    'message' => 'Payment already completed',
+                ], 409);
+            }
+
+            if ($currentStatus !== 'failed') {
+                $description = trim((string) ($payment['description'] ?? ''));
+                $cancelReason = 'Nguoi dung dong popup QR va huy giao dich.';
+
+                if ($description === '') {
+                    $description = $cancelReason;
+                } elseif (!str_contains($description, $cancelReason)) {
+                    $description .= ' | ' . $cancelReason;
+                }
+
+                $updates = [
+                    'status' => 'failed',
+                    'description' => $description,
+                ];
+
+                if ($this->paymentHasColumn('received')) {
+                    $updates['received'] = 0;
+                }
+
+                if ($this->paymentHasColumn('updated_at')) {
+                    $updates['updated_at'] = (new \DateTimeImmutable())->format('Y-m-d H:i:s');
+                }
+
+                $assignments = [];
+
+                foreach (array_keys($updates) as $column) {
+                    $assignments[] = '`' . str_replace('`', '``', $column) . '` = :' . $column;
+                }
+
+                $updates['id'] = (int) ($payment['id'] ?? 0);
+
+                Database::connection()->prepare(
+                    'update payments set ' . implode(', ', $assignments) . ' where id = :id'
+                )->execute($updates);
+            }
+
+            unset($_SESSION['payment_qr']);
+
+            Response::json([
+                'status' => true,
+                'message' => 'Payment cancelled',
+                'payment_status' => 'failed',
+            ]);
+        } catch (Throwable) {
+            Response::json([
+                'status' => false,
+                'message' => 'Cannot cancel payment right now',
+            ], 500);
+        }
+    }
+
     public function profile(): never
     {
         $user = $_SESSION['user'] ?? null;

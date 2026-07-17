@@ -389,15 +389,26 @@ class Web2MWebhookController extends Controller
         $nextTongNap = max(0, (int) $user->tongnap) + $amountInt;
         $nextTongNapThang = max(0, (int) $user->tongNapThang) + $amountInt;
         $nextTongNapTuan = max(0, (int) $user->tongNapTuan) + $amountInt;
+        $currentTongNap = max(0, (int) $user->tongnap);
+        $shouldActivate = $currentTongNap < 20000
+            && $nextTongNap >= 20000
+            && ((int) $user->activated !== 1 || (int) $user->active !== 1);
+
+        $updateValues = [
+            'balance' => $nextBalance,
+            'tongnap' => $nextTongNap,
+            'tongNapThang' => $nextTongNapThang,
+            'tongNapTuan' => $nextTongNapTuan,
+        ];
+
+        if ($shouldActivate) {
+            $updateValues['activated'] = 1;
+            $updateValues['active'] = 1;
+        }
 
         User::query()
             ->whereKey($user->getKey())
-            ->update([
-                'balance' => $nextBalance,
-                'tongnap' => $nextTongNap,
-                'tongNapThang' => $nextTongNapThang,
-                'tongNapTuan' => $nextTongNapTuan,
-            ]);
+            ->update($updateValues);
     }
 
     private function markPaymentSuccess(
