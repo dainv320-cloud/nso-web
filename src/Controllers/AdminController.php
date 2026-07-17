@@ -16,7 +16,6 @@ final class AdminController
     private const ROLE_ADMIN = 99;
     private const ROLE_COLLABORATOR = 1;
     private const ROLE_USER = 0;
-    private const REGISTER_BONUS_AMOUNT = 5000000;
     private ?array $userTableSchema = null;
     private ?array $postsTableSchema = null;
     private ?array $itemTableSchema = null;
@@ -106,7 +105,6 @@ final class AdminController
     public function users(): never
     {
         $admin = $this->requireAdmin();
-        $registerBonusEnabled = $this->registerBonusEnabled();
         $search = trim((string) ($_GET['q'] ?? ''));
         $listing = $search !== ''
             ? $this->paginateRows(
@@ -135,17 +133,11 @@ final class AdminController
             'admin' => $admin,
             'section' => 'users',
             'heading' => 'Danh sach user',
-            'description' => 'Quan ly cac truong hien tai cua bang users. Thuong dang ky hien tai: ' . number_format(self::REGISTER_BONUS_AMOUNT, 0, ',', '.') . ' coin.',
+            'description' => 'Quan ly cac truong hien tai cua bang users.',
             'createUrl' => '/admin/users/create',
             'searchUrl' => '/admin/users',
             'searchValue' => $search,
             'searchPlaceholder' => 'Tim theo username, ten hoac email',
-            'featureToggles' => [[
-                'url' => '/admin/users/register-bonus-toggle',
-                'enabled' => $registerBonusEnabled,
-                'enableLabel' => 'Bat thuong dang ky',
-                'disableLabel' => 'Tat thuong dang ky',
-            ]],
             'rows' => $listing['rows'],
             'pagination' => $listing['pagination'],
             'columns' => [
@@ -174,22 +166,6 @@ final class AdminController
             'actions' => ['edit' => '/admin/users/%s/edit', 'delete' => '/admin/users/%s/delete'],
             'flash' => $this->pullFlash(),
         ]);
-    }
-
-    public function toggleRegisterBonus(): never
-    {
-        $this->requireAdmin();
-        $enabled = ($_POST['enabled'] ?? '') === '1';
-
-        if (!$this->writeEnvValue('REGISTER_BONUS_ENABLED', $enabled ? 'true' : 'false')) {
-            $this->redirectWithFlash('/admin/users', "Kh\u{00F4}ng th\u{1EC3} c\u{1EAD}p nh\u{1EAD}t file .env.", 'error');
-        }
-
-        $message = $enabled
-            ? "\u{0110}\u{00E3} b\u{1EAD}t th\u{01B0}\u{1EDF}ng \u{0111}\u{0103}ng k\u{00FD} " . number_format(self::REGISTER_BONUS_AMOUNT, 0, ',', '.') . ' coin.'
-            : "\u{0110}\u{00E3} t\u{1EAF}t th\u{01B0}\u{1EDF}ng \u{0111}\u{0103}ng k\u{00FD}.";
-
-        $this->redirectWithFlash('/admin/users', $message);
     }
 
     public function userForm(?int $id = null): never
@@ -2015,11 +1991,6 @@ final class AdminController
     private function paymentEnabled(): bool
     {
         return $this->databaseBool(env('PAYMENT_ENABLED', 'true'));
-    }
-
-    private function registerBonusEnabled(): bool
-    {
-        return $this->databaseBool(env('REGISTER_BONUS_ENABLED', 'true'));
     }
 
     private function writeEnvValue(string $key, string $value): bool

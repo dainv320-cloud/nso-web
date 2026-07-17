@@ -47,7 +47,6 @@ Route::get('/admin/users/{id}/edit', fn (int $id) => (new AdminController())->us
 Route::get('/admin/users/{id}/delete', fn (int $id) => (new AdminController())->confirmUserDelete($id));
 Route::post('/admin/users/save', fn () => (new AdminController())->saveUser());
 Route::post('/admin/users/delete', fn () => (new AdminController())->deleteUser());
-Route::post('/admin/users/register-bonus-toggle', fn () => (new AdminController())->toggleRegisterBonus());
 Route::get('/admin/posts', fn () => (new AdminController())->posts());
 Route::get('/admin/items', fn () => (new AdminController())->items());
 Route::get('/admin/posts/create', fn () => (new AdminController())->postForm());

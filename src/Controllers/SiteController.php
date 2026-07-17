@@ -15,7 +15,6 @@ use Throwable;
 final class SiteController
 {
     private const PAYMENT_REF_WIDTH = 3;
-    private const REGISTER_BONUS_AMOUNT = 5000000;
 
     private ContentRepository $content;
     private ?array $userTableSchema = null;
@@ -835,7 +834,7 @@ final class SiteController
                 'username' => $username,
                 'email' => $email !== '' ? $email : null,
                 'password' => password_hash($password, PASSWORD_BCRYPT),
-                'balance' => $this->registerBonusAmount(),
+                'balance' => 0,
             ]);
             $account = [
                 'id' => (int) $connection->lastInsertId(),
@@ -1028,15 +1027,6 @@ final class SiteController
     private function paymentEnabled(): bool
     {
         return $this->databaseBool(env('PAYMENT_ENABLED', 'true'));
-    }
-
-    private function registerBonusAmount(): int
-    {
-        if (!$this->databaseBool(env('REGISTER_BONUS_ENABLED', 'true'))) {
-            return 0;
-        }
-
-        return self::REGISTER_BONUS_AMOUNT;
     }
 
     private function accountForUsername(string $username): ?array
