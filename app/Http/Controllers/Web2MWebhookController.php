@@ -247,7 +247,7 @@ class Web2MWebhookController extends Controller
                     return;
                 }
 
-                $user = User::query()->whereKey((int) $payment->user_id)->lockForUpdate()->first();
+                $user = $this->lockedUserById((int) $payment->user_id);
 
                 if (!$user) {
                     $this->markPaymentFailed($payment, $normalizedItem, $rawPayload, 'Khong tim thay user cua giao dich pending.');
@@ -257,6 +257,15 @@ class Web2MWebhookController extends Controller
 
                 $beforeSnapshot = $this->userBalanceSnapshot($user);
                 $coinAmount = $this->paymentCoinAmount($payment, $normalizedItem['amount']);
+                $this->writeTongNapTrace('before_credit', [
+                    'payment_id' => (int) $payment->id,
+                    'payment_code' => (string) ($payment->trans_id ?? ''),
+                    'user_id' => (int) $user->id,
+                    'username' => (string) ($user->username ?? ''),
+                    'amount' => (float) $normalizedItem['amount'],
+                    'coin_amount' => $coinAmount,
+                    'snapshot' => $beforeSnapshot,
+                ]);
                 $this->creditUser($user, $normalizedItem['amount'], $coinAmount);
                 $this->markPaymentSuccess($payment, $normalizedItem, $rawPayload, $beforeSnapshot);
             });
@@ -382,17 +391,31 @@ class Web2MWebhookController extends Controller
         return array_values(array_unique($matches[0]));
     }
 
+    private function lockedUserById(int $userId): ?User
+    {
+        return User::query()
+            ->whereKey($userId)
+            ->lockForUpdate()
+            ->first();
+    }
+
     private function creditUser(User $user, float $amount, int $coinAmount): void
     {
+        $currentUser = $this->lockedUserById((int) $user->getKey());
+
+        if (!$currentUser) {
+            throw new \RuntimeException('Khong tim thay user de cong nap.');
+        }
+
         $amountInt = max(0, (int) round($amount));
-        $nextBalance = max(0, (int) $user->balance) + max(0, $coinAmount);
-        $nextTongNap = max(0, (int) $user->tongnap) + $amountInt;
-        $nextTongNapThang = max(0, (int) $user->tongNapThang) + $amountInt;
-        $nextTongNapTuan = max(0, (int) $user->tongNapTuan) + $amountInt;
-        $currentTongNap = max(0, (int) $user->tongnap);
+        $nextBalance = max(0, (int) $currentUser->balance) + max(0, $coinAmount);
+        $nextTongNap = max(0, (int) $currentUser->tongnap) + $amountInt;
+        $nextTongNapThang = max(0, (int) $currentUser->tongNapThang) + $amountInt;
+        $nextTongNapTuan = max(0, (int) $currentUser->tongNapTuan) + $amountInt;
+        $currentTongNap = max(0, (int) $currentUser->tongnap);
         $shouldActivate = $currentTongNap < 20000
             && $nextTongNap >= 20000
-            && ((int) $user->activated !== 1 || (int) $user->active !== 1);
+            && ((int) $currentUser->activated !== 1 || (int) $currentUser->active !== 1);
 
         $updateValues = [
             'balance' => $nextBalance,
@@ -406,9 +429,40 @@ class Web2MWebhookController extends Controller
             $updateValues['active'] = 1;
         }
 
+        $this->writeTongNapTrace('credit_user', [
+            'user_id' => (int) $currentUser->id,
+            'username' => (string) ($currentUser->username ?? ''),
+            'amount' => $amountInt,
+            'coin_amount' => $coinAmount,
+            'current' => [
+                'balance' => (int) $currentUser->balance,
+                'tongnap' => (int) $currentUser->tongnap,
+                'tongNapThang' => (int) $currentUser->tongNapThang,
+                'tongNapTuan' => (int) $currentUser->tongNapTuan,
+                'activated' => (int) $currentUser->activated,
+                'active' => (int) $currentUser->active,
+            ],
+            'next' => $updateValues,
+        ]);
+
         User::query()
-            ->whereKey($user->getKey())
+            ->whereKey($currentUser->getKey())
             ->update($updateValues);
+
+        $updatedUser = $this->lockedUserById((int) $currentUser->getKey());
+
+        $this->writeTongNapTrace('after_credit', [
+            'user_id' => (int) $currentUser->id,
+            'username' => (string) ($currentUser->username ?? ''),
+            'persisted' => $updatedUser ? [
+                'balance' => (int) $updatedUser->balance,
+                'tongnap' => (int) $updatedUser->tongnap,
+                'tongNapThang' => (int) $updatedUser->tongNapThang,
+                'tongNapTuan' => (int) $updatedUser->tongNapTuan,
+                'activated' => (int) $updatedUser->activated,
+                'active' => (int) $updatedUser->active,
+            ] : null,
+        ]);
     }
 
     private function markPaymentSuccess(
@@ -584,5 +638,26 @@ class Web2MWebhookController extends Controller
             || str_contains($message, 'payments_transaction_id_unique')
             || str_contains($message, 'payments_trans_id_unique')
             || str_contains($message, 'Duplicate entry');
+    }
+
+    private function writeTongNapTrace(string $stage, array $payload): void
+    {
+        $logDir = storage_path('logs');
+
+        if (!is_dir($logDir)) {
+            mkdir($logDir, 0755, true);
+        }
+
+        $entry = [
+            'time' => now()->toDateTimeString(),
+            'stage' => $stage,
+            'payload' => $payload,
+        ];
+
+        file_put_contents(
+            $logDir . DIRECTORY_SEPARATOR . 'tongnap-trace.log',
+            json_encode($entry, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . PHP_EOL,
+            FILE_APPEND | LOCK_EX,
+        );
     }
 }
