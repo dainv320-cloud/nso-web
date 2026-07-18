@@ -191,26 +191,10 @@ class Web2MWebhookController extends Controller
         }
 
         if (!$this->hasValidTransactionData($normalizedItem)) {
-            $this->logFailedWebhook(
-                $normalizedItem['transaction_id'],
-                $normalizedItem['amount'],
-                $normalizedItem['description'],
-                $rawPayload,
-                'Du lieu giao dich Web2M khong hop le.',
-            );
-
             return;
         }
 
         if ($normalizedItem['type'] !== 'IN') {
-            $this->logFailedWebhook(
-                $normalizedItem['transaction_id'],
-                $normalizedItem['amount'],
-                $normalizedItem['description'],
-                $rawPayload,
-                'Bo qua giao dich khong phai tien vao.',
-            );
-
             return;
         }
 
@@ -219,14 +203,6 @@ class Web2MWebhookController extends Controller
                 $payment = $this->paymentFromDescription($normalizedItem['description']);
 
                 if (!$payment) {
-                    $this->logFailedWebhook(
-                        $normalizedItem['transaction_id'],
-                        $normalizedItem['amount'],
-                        $normalizedItem['description'],
-                        $rawPayload,
-                        'Khong tim thay giao dich pending khop noi dung chuyen khoan.',
-                    );
-
                     return;
                 }
 
@@ -496,34 +472,6 @@ class Web2MWebhookController extends Controller
         $values['received'] = 0;
 
         $payment->forceFill($values)->save();
-    }
-
-    private function logFailedWebhook(
-        string $web2mTransactionId,
-        float $amount,
-        string $description,
-        array $payload,
-        string $reason,
-    ): void {
-        $transactionId = $web2mTransactionId !== ''
-            ? 'web2m-' . $web2mTransactionId
-            : 'web2m-invalid-' . sha1(json_encode($payload) . microtime(true));
-
-        $values = $this->basePaymentValues(
-            description: $description . ' | ' . $reason,
-            item: [],
-            rawPayload: $payload,
-            status: 'failed',
-            reason: $reason,
-        ) + [
-            'trans_id' => $transactionId,
-            'amount' => max($amount, 0),
-        ];
-
-        Payment::query()->updateOrCreate(
-            ['trans_id' => $transactionId],
-            $values,
-        );
     }
 
     private function basePaymentValues(
