@@ -193,9 +193,9 @@ final class AdminController
                 ['name' => 'status', 'label' => 'Status', 'type' => 'select', 'options' => $this->userStatusOptions()],
                 ['name' => 'role', 'label' => 'Role', 'type' => 'select', 'options' => $this->userRoleOptions()],
                 ['name' => 'balance', 'label' => 'Balance', 'type' => 'money'],
-                ['name' => 'tongnap', 'label' => 'Tong nap', 'type' => 'money'],
-                ['name' => 'tongNapThang', 'label' => 'Tong nap thang', 'type' => 'money'],
-                ['name' => 'tongNapTuan', 'label' => 'Tong nap tuan', 'type' => 'money'],
+                ['name' => 'tongnap', 'label' => 'Tong nap', 'type' => 'money', 'readonly' => true],
+                ['name' => 'tongNapThang', 'label' => 'Tong nap thang', 'type' => 'money', 'readonly' => true],
+                ['name' => 'tongNapTuan', 'label' => 'Tong nap tuan', 'type' => 'money', 'readonly' => true],
             ],
             'flash' => $this->pullFlash(),
         ]);
@@ -261,14 +261,11 @@ final class AdminController
             'active' => $id > 0 ? (int) ($existingUser['active'] ?? 0) : ($status === 1 ? 1 : 0),
             'role' => $this->userRoleFromRequest($id),
             'balance' => $this->moneyIntFromRequest('balance'),
-            'tongnap' => $this->moneyIntFromRequest('tongnap'),
-            'tongNapThang' => $this->moneyIntFromRequest('tongNapThang'),
-            'tongNapTuan' => $this->moneyIntFromRequest('tongNapTuan'),
         ];
 
         try {
             if ($id > 0) {
-                $sql = 'update users set name = :name, username = :username, email = :email, status = :status, activated = :activated, active = :active, role = :role, balance = :balance, tongnap = :tongnap, tongNapThang = :tongNapThang, tongNapTuan = :tongNapTuan';
+                $sql = 'update users set name = :name, username = :username, email = :email, status = :status, activated = :activated, active = :active, role = :role, balance = :balance';
 
                 if ($password !== '') {
                     if (strlen($password) < 6) {
@@ -283,6 +280,9 @@ final class AdminController
                 $data['id'] = $id;
                 Database::connection()->prepare($sql)->execute($data);
             } else {
+                $data['tongnap'] = 0;
+                $data['tongNapThang'] = 0;
+                $data['tongNapTuan'] = 0;
                 $data['password'] = password_hash($password, PASSWORD_BCRYPT);
                 Database::connection()->prepare(
                     'insert into users (name, username, email, password, status, activated, active, role, balance, tongnap, tongNapThang, tongNapTuan, created_at, updated_at)
